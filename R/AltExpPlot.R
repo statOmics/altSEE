@@ -220,87 +220,266 @@ setMethod(".generateDotPlotData", "AltExpPlot", function(x, envir) {
 })
 
 
-############################################################
-# To control visual parameters
-############################################################
+#' ############################################################
+#' # To control visual parameters
+#' ############################################################
+#' 
+#' # Copied from DotPlot and modified on one line:  .add_extra_aesthetic_columns_AltExp
+#' 
+#' #' @export
+#' setMethod(".generateOutput", "AltExpPlot", function(x, se, all_memory, all_contents) {
+#'   # Initialize an environment storing information for generating ggplot commands
+#'   plot_env <- new.env()
+#'   plot_env$se <- se
+#'   plot_env$colormap <- iSEE:::.get_colormap(se)
+#' 
+#'   all_cmds <- list()
+#'   all_labels <- list()
+#' 
+#'   # Doing this first so that .generateDotPlotData can respond to the selection.
+#'   all_cmds$select <- iSEE:::.processMultiSelections(x, all_memory, all_contents, plot_env)
+#' 
+#'   xy_out <- iSEE:::.generateDotPlotData(x, plot_env)
+#'   all_cmds$xy <- xy_out$commands
+#'   all_labels <- c(all_labels, xy_out$labels)
+#' 
+#'   # Line below is the only change compared to the DotPlot method to ensure that the aesthetics dimensions are correct
+#'   extra_out <- .add_extra_aesthetic_columns_AltExp(x, plot_env)
+#'   all_cmds <- c(all_cmds, extra_out$commands)
+#'   all_labels <- c(all_labels, extra_out$labels)
+#' 
+#'   select_out2 <- iSEE:::.add_selectby_column(x, plot_env)
+#'   all_cmds <- c(all_cmds, select_out2)
+#' 
+#'   # We need to set up the plot type before downsampling,
+#'   # to ensure the X/Y jitter is correctly computed.
+#'   all_cmds$setup <-  iSEE:::.choose_plot_type(plot_env)
+#' 
+#'   # Also collect the plot coordinates before downsampling.
+#'   panel_data <- plot_env$plot.data
+#' 
+#'   # Non-data-related fiddling to affect the visual display.
+#'   # First, scrambling the plot.data to avoid biases.
+#'   scramble_cmds <- c(
+#'     "# Avoid visual biases from default ordering by shuffling the points",
+#'     sprintf("set.seed(%i);", nrow(panel_data)), # Using a deterministically different seed to keep things exciting.
+#'     "plot.data <- plot.data[sample(nrow(plot.data)),,drop=FALSE];"
+#'   )
+#'   iSEE:::.textEval(scramble_cmds, plot_env)
+#'   all_cmds$shuffle <- scramble_cmds
+#' 
+#'   # Next, reordering by priority (this is stable so any ordering due to the
+#'   # shuffling above is still preserved within each priority level).
+#'   priority_out <- iSEE:::.prioritizeDotPlotData(x, plot_env)
+#'   rescaled_res <- FALSE
+#'   if (has_priority <- !is.null(priority_out)) {
+#'     order_cmds <- "plot.data <- plot.data[order(.priority),,drop=FALSE];"
+#'     iSEE:::.textEval(order_cmds, plot_env)
+#'     all_cmds$priority <- c(priority_out$commands, order_cmds)
+#'     rescaled_res <- priority_out$rescaled
+#'   }
+#'   # Finally, the big kahuna of downsampling.
+#'   all_cmds$downsample <- iSEE:::.downsample_points(x, plot_env, priority=has_priority, rescaled=rescaled_res)
+#' 
+#'   plot_out <- iSEE:::.generateDotPlot(x, all_labels, plot_env)
+#'   all_cmds$plot <- plot_out$commands
+#' 
+#'   list(commands=all_cmds, contents=panel_data, plot=plot_out$plot, varname="plot.data")
+#' 
+#' })
 
-# Copied from DotPlot and modified on one line:  .add_extra_aesthetic_columns_AltExp
+# ### Add function to override non exported functions
+# # Copied from .add_extra_aesthetic_columns in outputs_plot.R
+# # Include functions to override inside to adjust for dimensions
+# # .addDotPlotDataColor, adjusted to include feature id from altExp to color
+# # .addDotPlotDataShape, adjusted to include feature id from altExp for shape
+# # .addDotPlotDataSize
+# # .addDotPlotDataFacets
+# 
+# 
+# .add_extra_aesthetic_columns_AltExp <- function (x, envir)
+# {
+#   # We first include all .addDotPlotData functions that we have to override
+#   .addDotPlotDataColor <- function(x, envir) {
+#     color_choice <- slot(x, iSEE:::.colorByField)
+# 
+#     if (color_choice == iSEE:::.colorByColDataTitle) {
+#       covariate_name <- slot(x, iSEE:::.colorByColData)
+#       label <- covariate_name
+# 
+#       if (covariate_name != "id") {
+#         # Normal case: column exists in colData
+#         cmds <- sprintf(
+#           "plot.data$ColorBy <- rep(colData(se)[, %s], dplyr::n_distinct(plot.data$id));",
+#           deparse(covariate_name)
+#         )
+#       } else {
+#         # Special case: id is generated in plot.data
+#         cmds <- "plot.data$ColorBy <- plot.data$id"
+#       }
+# 
+#     } else if (color_choice == iSEE:::.colorByFeatNameTitle) {
+#       # Set the color to the selected gene
+#       chosen_gene <- slot(x, iSEE:::.colorByFeatName)
+#       assay_choice <- slot(x, iSEE:::.colorByFeatNameAssay)
+#       label <- sprintf("%s\n(%s)", chosen_gene, assay_choice)
+#       cmds <- sprintf(
+#         "plot.data$ColorBy <- rep(assay(se, %s)[%s, ], dplyr::n_distinct(plot.data$id));",
+#         deparse(assay_choice), deparse(chosen_gene)
+#       )
+# 
+#     } else if (color_choice == iSEE:::.colorBySampNameTitle) {
+#       chosen_sample <- slot(x, iSEE:::.colorBySampName)
+#       label <- chosen_sample
+#       cmds <- sprintf(
+#         "plot.data$ColorBy <- logical(nrow(plot.data));\nplot.data[%s, 'ColorBy'] <- TRUE;",
+#         deparse(chosen_sample)
+#       )
+# 
+#     } else if (color_choice == iSEE:::.colorByColSelectionsTitle) {
+#       label <- "Column selection"
+#       if (exists("col_selected", envir=envir, inherits=FALSE)) {
+#         target <- "col_selected"
+#       } else {
+#         target <- "list()"
+#       }
+#       cmds <- sprintf(
+#         "plot.data$ColorBy <- iSEE::multiSelectionToFactor(%s, colnames(se));",
+#         target
+#       )
+# 
+#     } else {
+#       return(NULL)
+#     }
+# 
+#     iSEE:::.textEval(cmds, envir)
+# 
+#     list(commands=cmds, labels=list(ColorBy=label))
+#   }
+# 
+#   .addDotPlotDataShape <- function(x, envir) {
+#     shape_choice <- slot(x, iSEE:::.shapeByField)
+# 
+#     if (shape_choice == iSEE:::.shapeByColDataTitle) {
+#       covariate_name <- slot(x, iSEE:::.shapeByColData)
+# 
+#       if (covariate_name == "id") {
+#         label <- "id"
+#         cmds <- "plot.data$ShapeBy <- plot.data$id"
+# 
+#       } else if (covariate_name %in% colnames(colData(envir$se))) {
+#         # normal iSEE behavior
+#         label <- covariate_name
+#         cmds <- sprintf(
+#           "plot.data$ShapeBy <- rep(colData(se)[, %s], dplyr::n_distinct(plot.data$id));",
+#           deparse(covariate_name)
+#         )
+# 
+#       } else {
+#         # fallback safety
+#         label <- "None"
+#         cmds <- "plot.data$ShapeBy <- NULL"
+#       }
+# 
+#     } else {
+#       # default fallback → use id
+#       label <- "id"
+#       cmds <- "plot.data$ShapeBy <- plot.data$id"
+#     }
+# 
+#     iSEE:::.textEval(cmds, envir)
+# 
+#     list(commands=cmds, labels=list(ShapeBy=label))
+#   }
+# 
+#   .addDotPlotDataSize <- function(x, envir) {
+#     size_choice <- slot(x, iSEE:::.sizeByField)
+# 
+#     if (size_choice == iSEE:::.sizeByColDataTitle) {
+#       covariate_name <- slot(x, iSEE:::.sizeByColData)
+#       label <- covariate_name
+#       cmds <- sprintf("plot.data$SizeBy <- rep(colData(se)[, %s], dplyr::n_distinct(plot.data$id));", deparse(covariate_name))
+# 
+#     } else {
+#       return(NULL)
+#     }
+# 
+#     iSEE:::.textEval(cmds, envir)
+# 
+#     list(commands=cmds, labels=list(SizeBy=label))
+#   }
+# 
+#   .addDotPlotDataFacets <-  function(x, envir) {
+#     facet_cmds <- NULL
+#     labels <- list()
+# 
+#     params <- list(
+#       list(iSEE:::.facetRow, "FacetRow", iSEE:::.facetRowByColData),
+#       list(iSEE:::.facetColumn, "FacetColumn", iSEE:::.facetColumnByColData)
+#     )
+# 
+#     for (f in seq_len(2)) {
+#       current <- params[[f]]
+#       param_field <- current[[1]]
+#       pd_field <- current[[2]]
+#       facet_mode <- slot(x, param_field)
+# 
+#       if (facet_mode == iSEE:::.facetByColDataTitle) {
+#         facet_data <- x[[current[[3]]]]
+#         facet_cmds[pd_field] <- sprintf("plot.data$%s <- rep(colData(se)[, %s], dplyr::n_distinct(plot.data$id));", pd_field, deparse(facet_data))
+#         labels[[pd_field]] <- facet_data
+# 
+#       } else if (facet_mode == iSEE:::.facetByColSelectionsTitle) {
+#       if (exists("col_selected", envir=envir, inherits=FALSE)) {
+#        target <- "col_selected"
+#       } else {
+#        target <- "list()"
+#       }
+#       facet_cmds[pd_field] <- sprintf("plot.data$%s <- iSEE::multiSelectionToFactor(%s, colnames(se));", pd_field, target)
+#       labels[[pd_field]] <- "Column selection"
+#       }
+#     }
+# 
+#     iSEE:::.textEval(facet_cmds, envir)
+# 
+#     list(commands=facet_cmds, labels=labels)
+#   }
+# 
+#   collected <- list()
+#   labels <- list()
+#   collected$coerce <- iSEE:::.coerce_dataframe_columns(envir,
+#                                                               fields = c("X", "Y"),
+#                                                               df = "plot.data",
+#                                                               max_levels = iSEE:::.get_factor_maxlevels())
+#   # Add commands adding optional columns to plot.data
+#   out_color <- .addDotPlotDataColor(x, envir)
+#   collected$color <- out_color$commands
+#   labels <- c(labels, out_color$labels)
+#   if (!is.null(envir$plot.data$ColorBy)) {
+#     collected$color <- c(collected$color, iSEE:::.coerce_dataframe_columns(envir,
+#                                                                     fields = "ColorBy", df = "plot.data", max_levels = iSEE:::.get_color_maxlevels()))
+#   }
+#   out_shape <- .addDotPlotDataShape(x, envir)
+#   collected$shape <- out_shape$commands
+#   labels <- c(labels, out_shape$labels)
+# 
+#   out_size <- .addDotPlotDataSize(x, envir)
+#   collected$size <- out_size$commands
+#   labels <- c(labels, out_size$labels)
+# 
+#   out_facets <- .addDotPlotDataFacets(x, envir)
+#   collected$facets <- out_facets$commands
+#   labels <- c(labels, out_facets$labels)
+# 
+#   list(commands = collected, labels = labels)
+# }
 
-#' @export
-setMethod(".generateOutput", "AltExpPlot", function(x, se, all_memory, all_contents) {
-  # Initialize an environment storing information for generating ggplot commands
-  plot_env <- new.env()
-  plot_env$se <- se
-  plot_env$colormap <- iSEE:::.get_colormap(se)
+# .addDotPlotDataColor etc from family_ColumnDotPlot.R in iSEE exported in 
+# custom iSEE on statOmics so previous part is commented and replaced with new 
+# methods for AltExpPlot
+# Currently also added Remotes: statomics/iSEE in DESCRIPTION
 
-  all_cmds <- list()
-  all_labels <- list()
-
-  # Doing this first so that .generateDotPlotData can respond to the selection.
-  all_cmds$select <- iSEE:::.processMultiSelections(x, all_memory, all_contents, plot_env)
-
-  xy_out <- iSEE:::.generateDotPlotData(x, plot_env)
-  all_cmds$xy <- xy_out$commands
-  all_labels <- c(all_labels, xy_out$labels)
-
-  # Line below is the only change compared to the DotPlot method to ensure that the aesthetics dimensions are correct
-  extra_out <- .add_extra_aesthetic_columns_AltExp(x, plot_env)
-  all_cmds <- c(all_cmds, extra_out$commands)
-  all_labels <- c(all_labels, extra_out$labels)
-
-  select_out2 <- iSEE:::.add_selectby_column(x, plot_env)
-  all_cmds <- c(all_cmds, select_out2)
-
-  # We need to set up the plot type before downsampling,
-  # to ensure the X/Y jitter is correctly computed.
-  all_cmds$setup <-  iSEE:::.choose_plot_type(plot_env)
-
-  # Also collect the plot coordinates before downsampling.
-  panel_data <- plot_env$plot.data
-
-  # Non-data-related fiddling to affect the visual display.
-  # First, scrambling the plot.data to avoid biases.
-  scramble_cmds <- c(
-    "# Avoid visual biases from default ordering by shuffling the points",
-    sprintf("set.seed(%i);", nrow(panel_data)), # Using a deterministically different seed to keep things exciting.
-    "plot.data <- plot.data[sample(nrow(plot.data)),,drop=FALSE];"
-  )
-  iSEE:::.textEval(scramble_cmds, plot_env)
-  all_cmds$shuffle <- scramble_cmds
-
-  # Next, reordering by priority (this is stable so any ordering due to the
-  # shuffling above is still preserved within each priority level).
-  priority_out <- iSEE:::.prioritizeDotPlotData(x, plot_env)
-  rescaled_res <- FALSE
-  if (has_priority <- !is.null(priority_out)) {
-    order_cmds <- "plot.data <- plot.data[order(.priority),,drop=FALSE];"
-    iSEE:::.textEval(order_cmds, plot_env)
-    all_cmds$priority <- c(priority_out$commands, order_cmds)
-    rescaled_res <- priority_out$rescaled
-  }
-  # Finally, the big kahuna of downsampling.
-  all_cmds$downsample <- iSEE:::.downsample_points(x, plot_env, priority=has_priority, rescaled=rescaled_res)
-
-  plot_out <- iSEE:::.generateDotPlot(x, all_labels, plot_env)
-  all_cmds$plot <- plot_out$commands
-
-  list(commands=all_cmds, contents=panel_data, plot=plot_out$plot, varname="plot.data")
-
-})
-
-### Add function to override non exported functions
-# Copied from .add_extra_aesthetic_columns in outputs_plot.R
-# Include functions to override inside to adjust for dimensions
-# .addDotPlotDataColor, adjusted to include feature id from altExp to color
-# .addDotPlotDataShape, adjusted to include feature id from altExp for shape
-# .addDotPlotDataSize
-# .addDotPlotDataFacets
-
-
-.add_extra_aesthetic_columns_AltExp <- function (x, envir)
-{
-  # We first include all .addDotPlotData functions that we have to override
-  .addDotPlotDataColor <- function(x, envir) {
+setMethod(".addDotPlotDataColor", "AltExpPlot", function(x, envir) {
     color_choice <- slot(x, iSEE:::.colorByField)
 
     if (color_choice == iSEE:::.colorByColDataTitle) {
@@ -355,9 +534,9 @@ setMethod(".generateOutput", "AltExpPlot", function(x, se, all_memory, all_conte
     iSEE:::.textEval(cmds, envir)
 
     list(commands=cmds, labels=list(ColorBy=label))
-  }
+  })
 
-  .addDotPlotDataShape <- function(x, envir) {
+setMethod(".addDotPlotDataShape", "AltExpPlot", function(x, envir) {
     shape_choice <- slot(x, iSEE:::.shapeByField)
 
     if (shape_choice == iSEE:::.shapeByColDataTitle) {
@@ -390,9 +569,9 @@ setMethod(".generateOutput", "AltExpPlot", function(x, se, all_memory, all_conte
     iSEE:::.textEval(cmds, envir)
 
     list(commands=cmds, labels=list(ShapeBy=label))
-  }
+  })
 
-  .addDotPlotDataSize <- function(x, envir) {
+setMethod(".addDotPlotDataSize", "AltExpPlot", function(x, envir) {
     size_choice <- slot(x, iSEE:::.sizeByField)
 
     if (size_choice == iSEE:::.sizeByColDataTitle) {
@@ -407,9 +586,9 @@ setMethod(".generateOutput", "AltExpPlot", function(x, se, all_memory, all_conte
     iSEE:::.textEval(cmds, envir)
 
     list(commands=cmds, labels=list(SizeBy=label))
-  }
+  })
 
-  .addDotPlotDataFacets <-  function(x, envir) {
+setMethod(".addDotPlotDataFacets", "AltExpPlot", function(x, envir) { 
     facet_cmds <- NULL
     labels <- list()
 
@@ -443,36 +622,9 @@ setMethod(".generateOutput", "AltExpPlot", function(x, se, all_memory, all_conte
     iSEE:::.textEval(facet_cmds, envir)
 
     list(commands=facet_cmds, labels=labels)
-  }
+  })
 
-  collected <- list()
-  labels <- list()
-  collected$coerce <- iSEE:::.coerce_dataframe_columns(envir,
-                                                              fields = c("X", "Y"),
-                                                              df = "plot.data",
-                                                              max_levels = iSEE:::.get_factor_maxlevels())
-  # Add commands adding optional columns to plot.data
-  out_color <- .addDotPlotDataColor(x, envir)
-  collected$color <- out_color$commands
-  labels <- c(labels, out_color$labels)
-  if (!is.null(envir$plot.data$ColorBy)) {
-    collected$color <- c(collected$color, iSEE:::.coerce_dataframe_columns(envir,
-                                                                    fields = "ColorBy", df = "plot.data", max_levels = iSEE:::.get_color_maxlevels()))
-  }
-  out_shape <- .addDotPlotDataShape(x, envir)
-  collected$shape <- out_shape$commands
-  labels <- c(labels, out_shape$labels)
 
-  out_size <- .addDotPlotDataSize(x, envir)
-  collected$size <- out_size$commands
-  labels <- c(labels, out_size$labels)
-
-  out_facets <- .addDotPlotDataFacets(x, envir)
-  collected$facets <- out_facets$commands
-  labels <- c(labels, out_facets$labels)
-
-  list(commands = collected, labels = labels)
-}
 
 ### Redefine .defineVisual interfaces
 ### Reduce color options as compared to DotPlot class
