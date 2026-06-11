@@ -345,19 +345,6 @@ setMethod(".generateDotPlot", "MainExpPlot", function(x, labels, envir) {
                       scatter2 = do.call(.scatter_plot2, args)
   )
 
-  # Shape scale: use n_distinct to get the right number of shapes
-  if (slot(x, iSEE:::.shapeByField) != iSEE:::.shapeByNothingTitle) {
-    n_shapes <- dplyr::n_distinct(plot_data$ShapeBy)
-    if (n_shapes < 26) {
-      N <- length(plot_cmds)
-      plot_cmds[[N]]     <- paste(plot_cmds[[N]], "+")
-      plot_cmds[[N + 1]] <- sprintf(
-        "scale_shape_manual(values = seq_len(%d))", n_shapes
-      )
-    }
-  }
-
-
   # Line layer — only when explicitly requested
   if (add_lines) {
     N <- length(plot_cmds)
