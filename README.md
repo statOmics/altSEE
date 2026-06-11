@@ -6,7 +6,6 @@
 The `altSEE` package contains material and code that extends the `iSEE` package (https://github.com/iSEE/iSEE).
 
 We welcome contributions from the community, see below for more instructions. 
-For example, during the Developer Day at the European Bioconductor 2019 conference (`#EuroBioc2019`, at the UCLouvain, in Brussels, Belgium), we proposed a hackathon-like session, and we focused on the design of "modes", i.e. preconfigured sets of panels and linked content to be used as starting setup when launching `iSEE`.
 
 ## Installation
 
