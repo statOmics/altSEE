@@ -1,5 +1,5 @@
 ---
-title: altSee panels
+title: altSEE panels
 author:
 - name: Lieven Clement
   affiliation: 
@@ -19,7 +19,7 @@ vignette: >
 
 ```{r, echo=FALSE}
 knitr::opts_chunk$set(error=FALSE, warning=FALSE, message=FALSE)
-library(BiocStyle)
+library("BiocStyle")
 ```
 
 ```{r, eval=!exists("SCREENSHOT"), include=FALSE}
@@ -35,27 +35,31 @@ This allows users to quickly parametrize bespoke apps for their data to address 
 We first load in the package:
 
 ```{r}
-library(iSEEu)
-library(altSEE)
-library(msqrob2)
-library(SingleCellExperiment)
-library(scater)
+library("iSEEu")
+library("altSEE")
+library("msqrob2")
+library("SingleCellExperiment")
+library("scater")
+library("BiocFileCache")
 ```
 
 # Differential abundance plots
 
-To demonstrate the use of these panels we will perform a differental abundance
-analysis on  of the CPTAC study 6 containing conditions A and B (Paulovich et al. 2010) from the example in the `cptac` vignette of the `msqrob2` package. 
+To demonstrate the use of these panels we will perform a differential abundance
+analysis on  the Shen data containing 5 spike-in conditions (a, b, c, d and e) 
+PRIDE identifierPXD003881 (Shen et al. 2018).
+The data is used in the first chapter of our [msqrob2book](https://statomics.github.io/msqrob2book/01-basics.html).
+Here we will only use spike-in conditions (a-c) for illustration purposes. 
 
 ```{r}
-peptideFile <- "https://github.com/statOmics/msqrob2data/raw/refs/heads/main/dda/cptacAvsB_lab3/peptides.txt"
+bfc <- BiocFileCache()
+peptideFile <- bfcrpath(bfc,"https://github.com/statOmics/msqrob2data/raw/refs/heads/main/dda/shen/peptides.txt")
 ```
 
 The quantitative columns in maxQuant start with "Intensity." (note the dot!).
 
 ```{r}
-peptides <- read.delim(peptideFile)
-names(peptides)
+peptides <- data.table::fread(peptideFile, check.names = TRUE, integer64 = "double")
 (quantCols <- grep("Intensity[.]", names(peptides), value = TRUE))
 ```
 
@@ -71,11 +75,20 @@ qf <- readQFeatures(peptides,
 Below we update the sample (column) annotations to encode the two conditions, A and B, and the original sample numbers.
 
 ```{r}
-qf$condition <- rep(c("A", "B"), each = 3)
-qf$sampleId <- paste0(qf$condition, rep(7:9, 2))
+qf$condition <- gsub("Intensity.(.).", "\\1", quantCols)
+qf$sampleId <- gsub("Intensity.(..)", "\\1",quantCols)
 colData(qf)
 ```
-We will now perform the data processing and as in `msqrob2` vignette `cptac`
+
+Here, we will only use first three conditions for illustration purposes.
+
+```{r}
+qf <- qf[,qf$condition %in% c("a", "b", "c"),]
+colData(qf)
+```
+
+We will now perform the data processing and as in `msqrob2` vignette in the 
+msqrob2book. 
 
 1. Replace missing values by `NA`.
 2. Perform log2-transformation
@@ -93,7 +106,7 @@ qf, ~ Proteins != "" & ## 3. Remove failed protein inference
   !grepl(";", Proteins)) ##  3. Remove protein groups
 qf <- filterFeatures(qf, ~ Reverse != "+" & ## 3. Remove decoys
                           Potential.contaminant != "+") ## 3. Remove contaminants
-qf <- filterNA(qf, i = "peptides_log", pNA = .5) ## 3. Remove peptides that were only picked up in 1 or 2 samples
+qf <- filterNA(qf, i = "peptides_log", pNA = .67) ## 3. Remove peptides that were picked up in less than 4 samples: pNA = 1-4/12. 
 
 qf <- sweep( #Subtract log2 norm factor column-by-column (MARGIN = 2) 
   qf,
@@ -111,30 +124,55 @@ qf <- aggregateFeatures(qf,
 ) ## 5. summarisation to protein level
 ```
 
-We model the data using msqrob2 and infer differential expression for the B-A group comparison
+We model the data using msqrob2 and infer differential expression for all 
+pairwise comparisons. 
 
 ```{r warning=FALSE}
+model <- ~ condition
 qf <- msqrob(
     qf,  
     i = "proteins",
-    formula = ~ condition,
+    formula = model,
     robust = TRUE)
+
+(allHypotheses <- createPairwiseContrasts(
+  model, 
+  colData(qf), 
+  "condition"
+))
+
+(L <- makeContrast(
+  allHypotheses,
+  parameterNames = 
+    model.matrix(model, colData(qf)) |>
+    colnames())
+)
+
+#Rename columns L
+colnames(L) <- c("b-a","c-a","c-b")
 
 qf <- hypothesisTest(
   qf,
   i = "proteins",
-  contrast = makeContrast("conditionB = 0",parameterNames = "conditionB")
-  )
+  contrast = L)
 ```
+Note, that we assessed three different null hypothesis for each protein: 
 
-Convert `QFeatures` object to `SingleCellExperiment`
+1. There is no differential abundances between condition b and a
+2. There is no differential abundances between condition c and a
+3. There is no differential abundances between condition c and b
+
+
+We now convert the `QFeatures` object to a `SingleCellExperiment` object to 
+visualize the data with iSEE and explore both the protein level data as well as
+their corresponding peptide intensities that were picked up using the custom 
+altSEE panels.
 
 ```{r}
 sce <- getWithColData(qf, i ="proteins") |> 
    as("SingleCellExperiment")
 rn <- rowData(sce) |> names()
-rowData(sce) <- cbind(rowData(sce)[,!rn%in%c("msqrobModels","conditionB")], rowData(sce)$conditionB)
-
+rowData(sce) <- rowData(sce)[,rn!="msqrobModels"] |> as.data.frame() 
 assayNames(sce) <- c("proteins","aggcounts")
 ```
 
@@ -157,13 +195,12 @@ assay(altExp(sce,"peptides"),"peptides_log") <- assay(qf,"peptides_log")
 ## launch iSEE
 
 ```{r}
-cptacAltExpApp <- iSEE(
+shenAltExpApp <- iSEE(
   sce,
   initial = list(
     ReducedDimensionPlot(),
-    VolcanoPlot(PanelId = 1L),
-    RowDataTable(PanelId = 1L, 
-                 RowSelectionSource = "VolcanoPlot1"),
+    VolcanoPlot(),
+    RowDataTable(RowSelectionSource = "VolcanoPlot1"),
     MainExpPlot(YAxisFeatureSource = "RowDataTable1", 
                  PlotType = "Scatter + lines", 
                  XAxis = "Column data",
@@ -181,10 +218,13 @@ cptacAltExpApp <- iSEE(
 To launch the app you can just enter its name `cptacAltExpApp` on the command line. 
 
 ```{r eval = FALSE}
-cptacAltExpApp
+shenAltExpApp
 ```
 
 
 ```{r, echo=FALSE}
 SCREENSHOT("screenshots/altExpApp.png")
 ```
+
+Note that you can adjust the volcano plot for other contrasts e.g. c-a and c-b 
+by selecting the corresponding p-value and log2 fold changes in the volcano plot. 
