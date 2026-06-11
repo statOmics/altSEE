@@ -1,4 +1,4 @@
-# `iSEEu`
+# `altSEE`
 
 <!-- badges: start -->
 <!-- badges: end -->
