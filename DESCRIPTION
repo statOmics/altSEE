@@ -14,5 +14,24 @@ Description: altSEE (the iSEE universe) contains diverse functionality to extend
 License: Artistic-2.0
 Encoding: UTF-8
 RoxygenNote: 7.3.3
-Depends: iSEE
+Depends: 
+    iSEE (>= 2.23.2),
+    ggplot2 (>= 3.4.0),
+    R (>= 4.5)
+Imports: 
+      SingleCellExperiment,
+      SummarizedExperiment,
+      colourpicker,
+      dplyr,
+      shiny,
+      tibble,
+      tidyr
+Suggests: 
+      msqrob2,
+      QFeatures,
+      BiocStyle,
+      iSEEu,
+      scater,
+      BiocFileCache
 Remotes: statomics/iSEE
+LazyData: true

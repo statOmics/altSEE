@@ -8,8 +8,48 @@
 #   .addDotPlotDataSize,  .addDotPlotDataFacets
 # Currently also added Remotes: statomics/iSEE in DESCRIPTION
 
+#' AltExpPlot: visualise alternative experiment data in iSEE
+#'
+#' An S4 class that extends \code{\linkS4class{FeatureAssayPlot}} to plot
+#' assay values from an \emph{alternative experiment}
+#' (\code{\link[SingleCellExperiment]{altExp}}) stored inside a
+#' \code{\linkS4class{SingleCellExperiment}}.  Features in the altExp are
+#' linked to features in the main experiment through a shared annotation
+#' column (\code{MapColumn}), allowing e.g. protein abundances to
+#' be displayed alongside peptide or precursor abundances in the same iSEE 
+#' session.
+#'
+#' @slot AltExp \code{character(1)}.  Name of the alternative experiment to
+#'   visualise (must be present in \code{altExpNames(se)}).
+#' @slot AltAssay \code{character(1)}.  Name of the assay within \code{AltExp}
+#'   whose values are shown on the y-axis.
+#' @slot MapColumn \code{character(1)}.  Name of a \code{character} or
+#'   \code{factor} column that is present in \code{rowData} of \emph{both} the
+#'   main experiment and the selected \code{AltExp}.  The value stored for the
+#'   selected main-experiment feature is used to retrieve the matching row(s)
+#'   from the altExp.
+#' @slot PlotType \code{character(1)}.  One of \code{"Auto"},
+#'   \code{"Scatter"}, or \code{"Scatter + lines"}.  \code{"Auto"} delegates
+#'   the choice to iSEE's internal heuristic; \code{"Scatter"} always uses a
+#'   dot plot; \code{"Scatter + lines"} adds a \code{geom_line} layer that
+#'   connects points belonging to the same altExp feature (useful for ordered
+#'   x-axes such as time points or sampleIds that include condition and repeat).
+#'
+#' @section Inherited slots:
+#' All slots from \code{\linkS4class{FeatureAssayPlot}} are inherited,
+#' including those controlling x-axis choice, colour, shape, size, faceting,
+#' and multi-selection behaviour.
+#'
+#' @seealso
+#' \code{\link{AltExpPlot}} for the constructor.
+#' \code{\linkS4class{FeatureAssayPlot}} for the parent class.
+#' \code{\link[SingleCellExperiment]{altExp}} for the underlying data accessor.
+#'
+#' @name AltExpPlot-class
+#' @rdname AltExpPlot-class
+#' @exportClass AltExpPlot
+#' 
 
-#' @export
 setClass("AltExpPlot", contains = "FeatureAssayPlot",
          slots = c(
            AltExp    = "character",
@@ -18,6 +58,7 @@ setClass("AltExpPlot", contains = "FeatureAssayPlot",
            PlotType  = "character"
          ))
 
+#' @importFrom iSEE .validStringError
 setValidity2("AltExpPlot", function(object) {
   msg <- character(0)
   msg <- .validStringError(msg, object, "PlotType")
@@ -25,6 +66,7 @@ setValidity2("AltExpPlot", function(object) {
   TRUE
 })
 
+#' @importFrom iSEE .emptyDefault .shapeByField .shapeByColDataTitle .shapeByColData
 setMethod("initialize", "AltExpPlot", function(.Object, ...) {
   args <- list(...)
   args <- .emptyDefault(args, "AltExp",    NA_character_)
@@ -38,6 +80,11 @@ setMethod("initialize", "AltExpPlot", function(.Object, ...) {
   do.call(callNextMethod, c(list(.Object), args))
 })
 
+
+#' @importFrom iSEE .replaceMissingWithFirst .colorByColDataTitle .colorByField
+#'   .colorByColData .shapeByField .shapeByColDataTitle .shapeByColData
+#' @importFrom SingleCellExperiment altExpNames altExp assayNames
+#' @importFrom SummarizedExperiment colData
 setMethod(".refineParameters", "AltExpPlot", function(x, se) {
   x <- callNextMethod()
   
@@ -75,14 +122,75 @@ setMethod(".refineParameters", "AltExpPlot", function(x, se) {
   x
 })
 
-#' @export
-AltExpPlot <- function(...) {new("AltExpPlot", ...)}
 
+#' Construct an AltExpPlot panel
+#'
+#' Creates an instance of the \code{\linkS4class{AltExpPlot}} class for use
+#' as a panel in an iSEE application.
+#'
+#' @param ... Named arguments corresponding to slots of
+#'   \code{\linkS4class{AltExpPlot}} or its parent classes.  Any slot not
+#'   supplied receives a sensible default: \code{AltExp} and \code{AltAssay}
+#'   default to \code{NA} (resolved at runtime from the
+#'   \code{SingleCellExperiment}); \code{MapColumn} defaults to \code{NA};
+#'   \code{PlotType} defaults to \code{"Auto"}.
+#'
+#' @return An \code{\linkS4class{AltExpPlot}} object.
+#'
+#' @examples
+#' \dontrun{
+#' # Minimal panel using runtime defaults
+#' AltExpPlot()
+#'
+#' # Pre-configure YAxisFeatureSource, AltAssay, PlotType, XAxis and 
+#' # XAxisColumnData
+#' # linked via the "Proteins" in rowData column, with lines connecting points
+#' AltExpPlot(YAxisFeatureSource = "RowDataTable1", 
+#'            AltAssay = "peptides_norm",
+#'            PlotType = "Scatter + lines", 
+#'            XAxis = "Column data", 
+#'            XAxisColumnData = "sampleId",
+#'            MapColumn = "Proteins")
+#'            
+#' # Example of iSEE instance with main and altExp
+#' data("sceProteinsPeptides")
+#' iSEE(
+#' sceProteinsPeptides,
+#' initial = list(
+#' RowDataTable(RowSelectionSource = "VolcanoPlot1"),
+#' MainExpPlot(YAxisFeatureSource = "RowDataTable1", 
+#'             PlotType = "Scatter + lines", 
+#'             XAxis = "Column data",
+#'             XAxisColumnData = "sampleId"),
+#' AltExpPlot(YAxisFeatureSource = "RowDataTable1", 
+#'            AltAssay = "peptides_norm",
+#'            PlotType = "Scatter + lines", 
+#'            XAxis = "Column data", 
+#'            XAxisColumnData = "sampleId",
+#'            MapColumn = "Proteins")
+#' )
+#' )
+#' }
+#'
+#' @seealso \code{\linkS4class{AltExpPlot}} for a description of all slots.
+#' @export
+
+AltExpPlot <- function(...) {new("AltExpPlot", ...)}
 
 setMethod(".fullName", "AltExpPlot", function(x) "AltExp plot")
 
 setMethod(".panelColor", "AltExpPlot", function(x) "#AA5500")
 
+#' @importFrom iSEE .getEncodedName .getCachedCommonInfo .choose_link
+#'   .selectizeInput.iSEE .radioButtons.iSEE .conditionalOnRadio
+#'   .featAssayYAxisFeatName .featAssayYAxisRowTable .featAssayYAxisFeatDynamic
+#'   .featAssayXAxis .featAssayXAxisColDataTitle .featAssayXAxisColData
+#'   .featAssayXAxisFeatNameTitle .featAssayXAxisFeatName
+#'   .featAssayXAxisRowTable .featAssayXAxisFeatDynamic
+#'   .featAssayXAxisNothingTitle
+#' @importFrom SingleCellExperiment altExpNames altExp assayNames
+#' @importFrom SummarizedExperiment rowData
+#' @importFrom shiny selectInput checkboxInput selectizeInput
 setMethod(".defineDataInterface", "AltExpPlot", function(x, se, select_info) {
   panel_name <- .getEncodedName(x)
   .input_FUN <- function(field) paste0(panel_name, "_", field)
@@ -201,6 +309,7 @@ setMethod(".defineDataInterface", "AltExpPlot", function(x, se, select_info) {
     )
   })
 
+#' @importFrom iSEE .getEncodedName .createUnprotectedParameterObservers
 setMethod(".createObservers", 
           "AltExpPlot", 
           function(x, se, input, session, pObjects, rObjects) {
@@ -218,6 +327,13 @@ setMethod(".createObservers",
   invisible(NULL)
 })
 
+
+#' @importFrom iSEE .featAssayYAxisFeatName .featAssayXAxis
+#'   .featAssayXAxisColDataTitle .featAssayXAxisColData .textEval
+#' @importFrom SingleCellExperiment altExp
+#' @importFrom SummarizedExperiment rowData assay colData
+#' @importFrom tibble rownames_to_column
+#' @importFrom tidyr pivot_longer
 setMethod(".generateDotPlotData", "AltExpPlot", function(x, envir) {
   data_cmds <- list()
   
@@ -277,6 +393,12 @@ setMethod(".generateDotPlotData", "AltExpPlot", function(x, envir) {
 
 # index colData directly by plot.data$sample
 
+
+#' @importFrom iSEE .colorByField .colorByColDataTitle .colorByFeatNameTitle
+#'   .colorByFeatName .colorByFeatNameAssay .colorBySampNameTitle
+#'   .colorBySampName .colorByColSelectionsTitle .textEval
+#' @importFrom SummarizedExperiment assay colData
+#' @importFrom dplyr n_distinct
 setMethod(".addDotPlotDataColor", "AltExpPlot", function(x, envir) {
   color_choice <- slot(x, iSEE:::.colorByField)
   
@@ -331,6 +453,9 @@ setMethod(".addDotPlotDataColor", "AltExpPlot", function(x, envir) {
   list(commands = cmds, labels = list(ColorBy = label))
 })
 
+
+#' @importFrom iSEE .shapeByField .shapeByColDataTitle .shapeByColData .textEval
+#' @importFrom SummarizedExperiment colData
 setMethod(".addDotPlotDataShape", "AltExpPlot", function(x, envir) {
   shape_choice   <- slot(x, iSEE:::.shapeByField)
   covariate_name <- slot(x, iSEE:::.shapeByColData)
@@ -363,6 +488,9 @@ setMethod(".addDotPlotDataShape", "AltExpPlot", function(x, envir) {
   list(commands = cmds, labels = list(ShapeBy = label))
 })
 
+
+#' @importFrom iSEE .sizeByField .sizeByColDataTitle .sizeByColData .textEval
+#' @importFrom SummarizedExperiment colData
 setMethod(".addDotPlotDataSize", "AltExpPlot", function(x, envir) {
   size_choice <- slot(x, iSEE:::.sizeByField)
   
@@ -381,6 +509,10 @@ setMethod(".addDotPlotDataSize", "AltExpPlot", function(x, envir) {
   list(commands = cmds, labels = list(SizeBy = label))
 })
 
+#' @importFrom iSEE .facetRow .facetColumn .facetRowByColData
+#'   .facetColumnByColData .facetByColDataTitle .facetByColSelectionsTitle
+#'   .textEval
+#' @importFrom SummarizedExperiment colData
 setMethod(".addDotPlotDataFacets", "AltExpPlot", function(x, envir) {
   facet_cmds <- NULL
   labels      <- list()
@@ -431,6 +563,14 @@ setMethod(".addDotPlotDataFacets", "AltExpPlot", function(x, envir) {
 ### Redefine .defineVisual interfaces
 ### Reduce color options as compared to DotPlot class
 
+
+#' @importFrom iSEE .getCachedCommonInfo .getEncodedName .colorByField
+#'   .colorByNothingTitle .colorByColDataTitle .allowableColorByDataChoices
+#'   .getDotPlotColorConstants .singleSelectionDimension .radioButtons.iSEE
+#'   .conditionalOnRadio .colorByDefaultColor .choose_link .selectTransAlpha
+#'   .sliderInput.iSEE
+#' @importFrom colourpicker colourInput
+#' @importFrom shiny hr tagList selectInput selectizeInput checkboxInput
 setMethod(".defineVisualColorInterface", 
           "AltExpPlot", 
           function(x, se, select_info) {
@@ -534,7 +674,14 @@ setMethod(".defineVisualColorInterface",
 })
 
 
-#Custom Shape deviating from DotPlot
+
+# Custom Shape interface: adds "id" as a shape-by option in addition to the
+# standard colData discrete covariates provided by the DotPlot parent class.
+#' @importFrom iSEE .getEncodedName .shapeByField .shapeByNothingTitle
+#'   .getDiscreteMetadataChoices .getDotPlotShapeConstants .radioButtons.iSEE
+#'   .conditionalOnRadio
+#' @importFrom shiny hr tagList selectInput
+
 setMethod(".defineVisualShapeInterface", "AltExpPlot", function(x, se) {
   discrete_covariates <- c("id", iSEE:::.getDiscreteMetadataChoices(x, se))
   
@@ -570,6 +717,14 @@ setMethod(".defineVisualShapeInterface", "AltExpPlot", function(x, se) {
 ############################################################
 # Plot generation
 ############################################################
+
+
+#' @importFrom iSEE .shapeByField .shapeByNothingTitle .buildAes
+#'   .set_colorby_when_none .addFacets .addCustomLabelsCommands
+#'   .addLabelCentersCommands .addMultiSelectionPlotCommands .textEval
+#'   .square_plot .violin_plot .scatter_plot
+#' @importFrom dplyr n_distinct
+#' @importFrom ggplot2 geom_line
 
 setMethod(".generateDotPlot", "AltExpPlot", function(x, labels, envir) {
   plot_data <- envir$plot.data
@@ -668,82 +823,3 @@ setMethod(".generateDotPlot", "AltExpPlot", function(x, labels, envir) {
   list(plot = iSEE:::.textEval(plot_cmds, envir), commands = plot_cmds)
 })
 
-############################################################
-# scatter_plot2 — base scatter renderer for AltExpPlot
-############################################################
-
-.scatter_plot2 <- function(plot_data, param_choices, x_lab, y_lab, color_lab,
-                           shape_lab, size_lab, title,
-                           by_row = FALSE, is_subsetted = FALSE,
-                           is_downsampled = FALSE) {
-  plot_cmds <- list()
-  
-  # Guard: too many features likely means the MapColumn is misconfigured.
-  # Return a consistent named list so callers can always do result$commands.
-  n_features <- dplyr::n_distinct(plot_data$id)
-  if (n_features > 1000) {
-    plot_cmds[["ggplot"]] <- paste0(
-      "ggplot() + ggtitle('More than 1000 features selected in altExp — ",
-      "is the Map column set correctly?')"
-    )
-    return(list(commands = unlist(plot_cmds)))
-  }
-  
-  color_set <- !is.null(plot_data$ColorBy)
-  shape_set <- slot(param_choices, 
-                    iSEE:::.shapeByField) != iSEE:::.shapeByNothingTitle
-  size_set  <- slot(param_choices, 
-                    iSEE:::.sizeByField)  != iSEE:::.sizeByNothingTitle
-  
-  new_aes <- iSEE:::.buildAes(
-    color = color_set, 
-    shape = shape_set, 
-    size = size_set,
-    alt   = c(color = iSEE:::.set_colorby_when_none(param_choices))
-  )
-  
-  plot_cmds[["ggplot"]]      <- "dot.plot <- ggplot() +"
-  plot_cmds[["points"]]      <- iSEE:::.create_points(
-    param_choices, !is.null(plot_data$SelectBy), new_aes, color_set, size_set
-    )
-  plot_cmds[["labs"]]        <- iSEE:::.buildLabs(
-    x = x_lab, y = y_lab, color = color_lab,
-    shape = shape_lab, size = size_lab, title = title
-    )
-  plot_cmds[["scale_color"]] <- iSEE:::.colorDotPlot(param_choices, plot_data$ColorBy)
-  plot_cmds[["guides"]]      <- iSEE:::.create_guides_command(param_choices, plot_data$ColorBy)
-  plot_cmds[["theme_base"]]  <- "theme_bw() +"
-  
-  font_size <- slot(param_choices, iSEE:::.plotFontSize)
-  legend_pos <- tolower(slot(param_choices, iSEE:::.plotLegendPosition))
-  
-  # Shared theme elements
-  common_theme <- sprintf(
-    "legend.position='%s', legend.box='vertical',
-     legend.text=element_text(size=%s),
-     legend.title=element_text(size=%s),
-     axis.title=element_text(size=%s),
-     title=element_text(size=%s)",
-    legend_pos,
-    font_size * iSEE:::.plotFontSizeLegendTextDefault,
-    font_size * iSEE:::.plotFontSizeLegendTitleDefault,
-    font_size * iSEE:::.plotFontSizeAxisTitleDefault,
-    font_size * iSEE:::.plotFontSizeTitleDefault
-  )
-  
-  plot_cmds[["theme_custom"]] <- if (is.numeric(plot_data$X)) {
-    sprintf(
-      "theme(%s, axis.text=element_text(size=%s))",
-      common_theme,
-      font_size * iSEE:::.plotFontSizeAxisTextDefault
-    )
-  } else {
-    sprintf(
-      "theme(%s, axis.text.x=element_text(angle=45, size=%s, hjust=1))",
-      common_theme,
-      font_size * iSEE:::.plotFontSizeAxisTextDefault
-    )
-  }
-  
-  unlist(plot_cmds)
-}

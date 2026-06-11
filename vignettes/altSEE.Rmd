@@ -37,6 +37,7 @@ We first load in the package:
 ```{r}
 library("iSEEu")
 library("altSEE")
+library("QFeatures")
 library("msqrob2")
 library("SingleCellExperiment")
 library("scater")
@@ -209,13 +210,14 @@ shenAltExpApp <- iSEE(
                 AltAssay = "peptides_norm",
                 PlotType = "Scatter + lines", 
                 XAxis = "Column data", 
-                XAxisColumnData = "sampleId")
+                XAxisColumnData = "sampleId", 
+                MapColumn = "Proteins")
   )
 )
 ```
 
 
-To launch the app you can just enter its name `cptacAltExpApp` on the command line. 
+To launch the app you can just enter its name `shenAltExpApp` on the command line. 
 
 ```{r eval = FALSE}
 shenAltExpApp

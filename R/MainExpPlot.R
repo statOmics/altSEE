@@ -2,12 +2,44 @@
 # MainExpPlot — modified from FeatureAssayPlot
 ############################################################
 
-# Extends FeatureAssayPlot from iSEE to add Lineplots
+# Extends FeatureAssayPlot from iSEE to add line-plot support for the main
+# experiment assay.  Shares the .scatter_plot2 renderer with AltExpPlot
 
-#' @export
+#' MainExpPlot: FeatureAssayPlot with optional line-plot support
+#'
+#' An S4 class that extends \code{\linkS4class{FeatureAssayPlot}} to add a
+#' \code{PlotType} slot, allowing the user to overlay a \code{geom_line} layer
+#' on top of the standard scatter plot.  This is useful when the x-axis
+#' encodes an ordered variable such as time, pseudotime or an ordered sampleId 
+#' e.g. according to treatement conditions and you want to connect measurements 
+#' for the same feature across samples.
+#'
+#' @slot PlotType \code{character(1)}.  One of \code{"Auto"},
+#'   \code{"Scatter"}, or \code{"Scatter + lines"}.  \code{"Auto"} delegates
+#'   the renderer choice to iSEE's internal heuristic; \code{"Scatter"} always
+#'   uses a dot plot; \code{"Scatter + lines"} adds a \code{geom_line} layer
+#'   connecting all points (grouped by the selected feature via the \code{id}
+#'   column in \code{plot.data}).
+#'
+#' @section Inherited slots:
+#' All slots from \code{\linkS4class{FeatureAssayPlot}} are inherited,
+#' including those controlling assay choice, x-axis, colour, shape, size,
+#' faceting, and multi-selection behaviour.
+#'
+#' @seealso
+#' \code{\link{MainExpPlot}} for the constructor.
+#' \code{\linkS4class{FeatureAssayPlot}} for the parent class.
+#' \code{\linkS4class{AltExpPlot}} for the analogous panel that plots data
+#' from an alternative experiment.
+#'
+#' @name MainExpPlot-class
+#' @rdname MainExpPlot-class
+#' @exportClass MainExpPlot
+
 setClass("MainExpPlot", contains="FeatureAssayPlot",
          slots=c(PlotType = "character"))
 
+#' @importFrom iSEE .validStringError
 setValidity2("MainExpPlot", function(object) {
   msg <- character(0)
   msg <- .validStringError(msg, object, "PlotType")
@@ -15,13 +47,71 @@ setValidity2("MainExpPlot", function(object) {
   TRUE
 })
 
+#' @importFrom iSEE .emptyDefault
 setMethod("initialize", "MainExpPlot", function(.Object, ...) {
   args <- list(...)
   args <- .emptyDefault(args, "PlotType", "Auto")
   do.call(callNextMethod, c(list(.Object), args))
 })
 
+
+
+#' @importFrom iSEE .emptyDefault
+setMethod("initialize", "MainExpPlot", function(.Object, ...) {
+  args <- list(...)
+  args <- .emptyDefault(args, "PlotType", "Auto")
+  do.call(callNextMethod, c(list(.Object), args))
+})
+
+#' Construct a MainExpPlot panel
+#'
+#' Creates an instance of the \code{\linkS4class{MainExpPlot}} class for use
+#' as a panel in an iSEE application.
+#'
+#' @param ... Named arguments corresponding to slots of
+#'   \code{\linkS4class{MainExpPlot}} or its parent classes.  Any slot not
+#'   supplied receives a sensible default: \code{PlotType} defaults to
+#'   \code{"Auto"}.
+#'
+#' @return A \code{\linkS4class{MainExpPlot}} object.
+#'
+#' @examples
+#' \dontrun{
+#' # Minimal panel using runtime defaults
+#' MainExpPlot()
+#'
+#' # Pre-configure to show scatter plot with lines connecting points
+#' MainExpPlot(PlotType = "Scatter + lines")
+#' 
+#' # Pre-configure YAxisFeatureSource, PlotType, XAxis and XAxisColumnData
+#' MainExpPlot(YAxisFeatureSource = "RowDataTable1", 
+#' PlotType = "Scatter + lines", 
+#' XAxis = "Column data",
+#' XAxisColumnData = "sampleId")
+#' 
+#' # Example of iSEE instance with main and altExp
+#' data("proteinsPeptidesSce")
+#' iSEE(
+#' sceProteinsPeptides,
+#' initial = list(
+#' RowDataTable(RowSelectionSource = "VolcanoPlot1"),
+#' MainExpPlot(YAxisFeatureSource = "RowDataTable1", 
+#'             PlotType = "Scatter + lines", 
+#'             XAxis = "Column data",
+#'             XAxisColumnData = "sampleId"),
+#' AltExpPlot(YAxisFeatureSource = "RowDataTable1", 
+#'            AltAssay = "peptides_norm",
+#'            PlotType = "Scatter + lines", 
+#'            XAxis = "Column data", 
+#'            XAxisColumnData = "sampleId")
+#' )
+#' )
+#' }
+#'
+#' @seealso \code{\linkS4class{MainExpPlot}} for a description of all slots.
 #' @export
+#' 
+
 MainExpPlot <- function(...) {
   new("MainExpPlot", ...)
 }
@@ -29,6 +119,16 @@ MainExpPlot <- function(...) {
 setMethod(".fullName", "MainExpPlot", function(x) "MainExp plot")
 
 setMethod(".panelColor", "MainExpPlot", function(x) "#7BB854")
+
+
+#' @importFrom iSEE .getEncodedName .getCachedCommonInfo .choose_link
+#'   .selectizeInput.iSEE .radioButtons.iSEE .conditionalOnRadio
+#'   .featAssayYAxisFeatName .featAssayYAxisRowTable .featAssayYAxisFeatDynamic
+#'   .featAssayXAxis .featAssayXAxisNothingTitle .featAssayXAxisColDataTitle
+#'   .featAssayXAxisColData .featAssayXAxisFeatNameTitle .featAssayXAxisFeatName
+#'   .featAssayXAxisRowTable .featAssayXAxisFeatDynamic
+#' @importFrom SummarizedExperiment assayNames
+#' @importFrom shiny selectInput checkboxInput selectizeInput
 
 setMethod(".defineDataInterface", "MainExpPlot", function(x, se, select_info) {
   panel_name <- .getEncodedName(x)
@@ -113,6 +213,7 @@ setMethod(".defineDataInterface", "MainExpPlot", function(x, se, select_info) {
     )
   })
 
+#' @importFrom iSEE .getEncodedName .createUnprotectedParameterObservers
 setMethod(".createObservers", 
           "MainExpPlot", 
           function(x, se, input, session, pObjects, rObjects) {
@@ -129,6 +230,12 @@ setMethod(".createObservers",
 
   invisible(NULL)
 })
+
+
+#' @importFrom iSEE .featAssayYAxisFeatName .featAssayAssay .featAssayXAxis
+#'   .featAssayXAxisColDataTitle .featAssayXAxisFeatNameTitle
+#'   .featAssayXAxisFeatName .featAssayXAxisSelectionsTitle .textEval
+#' @importFrom SummarizedExperiment assay colData
 
 setMethod(".generateDotPlotData", "MainExpPlot", function(x, envir) {
   data_cmds <- list()
@@ -194,6 +301,14 @@ setMethod(".generateDotPlotData", "MainExpPlot", function(x, envir) {
 ############################################################
 # Plot generation
 ############################################################
+
+
+#' @importFrom iSEE .shapeByField .shapeByNothingTitle .buildAes
+#'   .set_colorby_when_none .addFacets .addCustomLabelsCommands
+#'   .addLabelCentersCommands .addMultiSelectionPlotCommands .textEval
+#'   .square_plot .violin_plot .scatter_plot
+#' @importFrom dplyr n_distinct
+#' @importFrom ggplot2 geom_line
 
 setMethod(".generateDotPlot", "MainExpPlot", function(x, labels, envir) {
   plot_data <- envir$plot.data
@@ -286,86 +401,3 @@ setMethod(".generateDotPlot", "MainExpPlot", function(x, labels, envir) {
 
   list(plot=iSEE:::.textEval(plot_cmds, envir), commands=plot_cmds)
 })
-
-
-############################################################
-# scatter_plot2 — base scatter renderer for MainExpPlot
-############################################################
-
-.scatter_plot2 <- function(plot_data, param_choices, x_lab, y_lab, color_lab,
-                           shape_lab, size_lab, title, 
-                           by_row = FALSE, is_subsetted = FALSE,
-                           is_downsampled = FALSE) {
-
-  plot_cmds <- list()
-  
-  # Guard: too many features likely means the MapColumn is misconfigured.
-  # Return a consistent named list so callers can always do result$commands.
-  n_features <- dplyr::n_distinct(plot_data$id)
-  if (n_features > 1000) {
-    plot_cmds[["ggplot"]] <- paste0(
-      "ggplot() + ggtitle('More than 1000 features selected in altExp — ",
-      "is the Map column set correctly?')"
-    )
-    return(list(commands = unlist(plot_cmds)))
-  }
-
-
-  color_set <- !is.null(plot_data$ColorBy)
-  shape_set <- slot(param_choices, 
-                    iSEE:::.shapeByField) != iSEE:::.shapeByNothingTitle
-  size_set <- slot(param_choices, 
-                   iSEE:::.sizeByField) != iSEE:::.sizeByNothingTitle
-  new_aes <- iSEE:::.buildAes(
-    color = color_set, 
-    shape = shape_set,
-    size = size_set, 
-    alt = c(color = iSEE:::.set_colorby_when_none(param_choices)))
-  
-  plot_cmds[["ggplot"]] <- "dot.plot <- ggplot() +"
-  plot_cmds[["points"]] <- iSEE:::.create_points(
-    param_choices, !is.null(plot_data$SelectBy),new_aes, color_set, size_set
-    )
-  plot_cmds[["labs"]] <- iSEE:::.buildLabs(
-    x = x_lab, y = y_lab, color = color_lab,
-    shape = shape_lab, size = size_lab, title = title
-    )
-  plot_cmds[["scale_color"]] <- iSEE:::.colorDotPlot(param_choices, 
-                                                     plot_data$ColorBy)
-  plot_cmds[["guides"]]      <- iSEE:::.create_guides_command(param_choices, 
-                                                              plot_data$ColorBy)
-  plot_cmds[["theme_base"]] <- "theme_bw() +"
-  
-  font_size <- slot(param_choices, iSEE:::.plotFontSize)
-  legend_pos <- tolower(slot(param_choices, iSEE:::.plotLegendPosition))
-  
-  # Shared theme elements
-  common_theme <- sprintf(
-    "legend.position='%s', legend.box='vertical',
-     legend.text=element_text(size=%s),
-     legend.title=element_text(size=%s),
-     axis.title=element_text(size=%s),
-     title=element_text(size=%s)",
-    legend_pos,
-    font_size * iSEE:::.plotFontSizeLegendTextDefault,
-    font_size * iSEE:::.plotFontSizeLegendTitleDefault,
-    font_size * iSEE:::.plotFontSizeAxisTitleDefault,
-    font_size * iSEE:::.plotFontSizeTitleDefault
-  )
-  
-  plot_cmds[["theme_custom"]] <- if (is.numeric(plot_data$X)) {
-    sprintf(
-      "theme(%s, axis.text=element_text(size=%s))",
-      common_theme,
-      font_size * iSEE:::.plotFontSizeAxisTextDefault
-    )
-  } else {
-    sprintf(
-      "theme(%s, axis.text.x=element_text(angle=45, size=%s, hjust=1))",
-      common_theme,
-      font_size * iSEE:::.plotFontSizeAxisTextDefault
-    )
-  }
-  
-  unlist(plot_cmds)
-}
