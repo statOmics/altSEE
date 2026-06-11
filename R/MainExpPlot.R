@@ -401,3 +401,68 @@ setMethod(".generateDotPlot", "MainExpPlot", function(x, labels, envir) {
 
   list(plot=iSEE:::.textEval(plot_cmds, envir), commands=plot_cmds)
 })
+
+
+############################################################
+# Panel tour
+############################################################
+
+#' @importFrom iSEE .getEncodedName .getPanelColor .addTourStep .dataParamBoxOpen
+#'   .definePanelTour
+setMethod(".definePanelTour", "MainExpPlot", function(x) {
+  
+  collated <- rbind(
+    c(
+      element = paste0("#", .getEncodedName(x)),
+      intro = sprintf(
+        "The <font color=\"%s\">MainExp plot</font> panel displays assay values
+from the <em>main experiment</em> of a <code>SummarizedExperiment</code> or
+<code>SingleCellExperiment</code> object.  Each point represents one sample
+(column), and the y-axis shows the assay value of the selected feature (row).
+<br><br>
+Unlike the standard Feature assay plot, this panel can optionally connect
+measurements across samples using <strong>Scatter + lines</strong>, which is
+useful for ordered sample layouts such as time courses, pseudotime trajectories,
+or experiments where samples have a meaningful ordering.",
+        .getPanelColor(x)
+      )
+    ),
+    c(
+      element = paste0("#", .getEncodedName(x)),
+      intro = "The selected feature is taken from the main experiment.  Its
+assay values are plotted directly on the y-axis.  Additional visual mappings
+such as colour, shape, size, and faceting can be used to highlight sample-level
+metadata or other biological annotations."
+    ),
+    c(
+      element = paste0("#", .getEncodedName(x)),
+      intro = "When <strong>Scatter + lines</strong> is selected, points
+belonging to the same feature are connected with a line.  This is most useful
+when the x-axis represents an ordered variable, for example sampling time,
+developmental progression, treatment dose, or an ordered sample identifier."
+    ),
+    .addTourStep(
+      x,
+      .dataParamBoxOpen,
+      "The <i>Data parameters</i> box contains the controls for choosing the
+feature, assay, x-axis, and plotting mode.<br><br>
+<strong>Action:</strong> click on this box to expand it and explore the
+available options."
+    )
+  )
+  
+  parent_tour <- callNextMethod()
+  
+  parent_tour <- parent_tour[
+    !grepl("Feature assay plot", parent_tour$intro),
+  ]
+  
+  rbind(
+    data.frame(
+      element = collated[, 1],
+      intro = collated[, 2],
+      stringsAsFactors = FALSE
+    ),
+    parent_tour
+  )
+})

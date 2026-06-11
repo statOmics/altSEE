@@ -187,7 +187,7 @@ setMethod(".panelColor", "AltExpPlot", function(x) "#AA5500")
 #'   .featAssayXAxis .featAssayXAxisColDataTitle .featAssayXAxisColData
 #'   .featAssayXAxisFeatNameTitle .featAssayXAxisFeatName
 #'   .featAssayXAxisRowTable .featAssayXAxisFeatDynamic
-#'   .featAssayXAxisNothingTitle
+#'   .featAssayXAxisNothingTitle .addSpecificTour
 #' @importFrom SingleCellExperiment altExpNames altExp assayNames
 #' @importFrom SummarizedExperiment rowData
 #' @importFrom shiny selectInput checkboxInput selectizeInput
@@ -222,6 +222,103 @@ setMethod(".defineDataInterface", "AltExpPlot", function(x, se, select_info) {
   if (length(column_covariates)) {
     xaxis_choices <- c(xaxis_choices, iSEE:::.featAssayXAxisColDataTitle)
   }
+  
+  # Tour steps for the y-axis feature selector and its linked controls
+  .addSpecificTour(class(x)[1], iSEE:::.featAssayYAxisFeatName, function(plot_name) {
+    data.frame(rbind(
+      c(
+        element = paste0("#", plot_name, "_", iSEE:::.featAssayYAxisFeatName,
+                         " + .selectize-control"),
+        intro = "Here, we choose the feature from the <em>main</em> experiment
+whose row annotation will be used to look up matching rows in the selected
+alternative experiment.  The assay values of those altExp rows — not those of
+the main-experiment feature itself — are what appears on the y-axis."
+      ),
+      c(
+        element = paste0("#", plot_name, "_", iSEE:::.featAssayYAxisRowTable,
+                         " + .selectize-control"),
+        intro = "The feature selection can also be driven automatically by a
+selection made in another panel, for example a <em>Row Data Table</em>.
+Choose the transmitting panel here so that clicking a row in that table
+immediately updates this plot."
+      ),
+      c(
+        element = paste0("#", plot_name, "_", iSEE:::.featAssayYAxisFeatDynamic),
+        intro = "If this box is checked, the panel will react to a feature
+selection from <em>any</em> row-based panel in the application rather than
+the one panel named above.  This is useful when you want to browse many
+features without reconfiguring the link each time."
+      )
+    ), stringsAsFactors = FALSE)
+  })
+  
+  # Tour steps for the AltExp-specific data controls
+  .addSpecificTour(class(x)[1], "AltExp", function(plot_name) {
+    data.frame(rbind(
+      c(
+        element = paste0("#", plot_name, "_AltExp + .selectize-control"),
+        intro = "Select which alternative experiment to visualise.  Alternative
+experiments are stored alongside the main <code>SingleCellExperiment</code>
+and typically hold complementary modalities such as precursor, PSM and/or peptide 
+abundances in MS-based proteomics that were summarised in protein abundances 
+stored in the mainExp; CITE-seq protein counts,
+ATAC-seq peaks; or CRISPR guide capture data."),
+      c(
+        element = paste0("#", plot_name, "_AltAssay + .selectize-control"),
+        intro = "Choose which assay within the selected alternative experiment
+to display on the y-axis — for example <code>peptide_norm</code> for
+log2-normalised values or <code>peptide_log</code> for log2 transformed and non 
+normalised values, etc.  Only assays belonging to the currently selected 
+        alternative experiment are listed."
+      ),
+      c(
+        element = paste0("#", plot_name, "_MapColumn + .selectize-control"),
+        intro = "This column must be present in <code>rowData</code> of both
+the main experiment and the selected alternative experiment.  The value stored
+for the chosen main-experiment feature is used to retrieve the corresponding
+row(s) from the altExp — for example a gene symbol shared between RNA and
+protein modalities, or the protein name shared between the precursor, peptide 
+and protein level assays.  Only <code>character</code> or <code>factor</code>
+columns that appear in both row annotation tables are offered here."
+      ),
+      c(
+        element = paste0("#", plot_name, "_PlotType"),
+        intro = "Controls how the altExp measurements are rendered.
+<strong>Auto</strong> lets iSEE choose based on the x-axis type.
+<strong>Scatter</strong> always produces a dot plot.
+<strong>Scatter + lines</strong> additionally connects the dots for each
+altExp feature with a line, which is most informative when the x-axis encodes
+an ordered variable such as pseudotime or sampleIds ordered according to 
+        treaments."
+      )
+    ), stringsAsFactors = FALSE)
+  })
+  
+  # Tour steps for the x-axis controls
+  .addSpecificTour(class(x)[1], iSEE:::.featAssayXAxis, function(plot_name) {
+    data.frame(rbind(
+      c(
+        element = paste0("#", plot_name, "_", iSEE:::.featAssayXAxis),
+        intro = "Choose what to show on the x-axis.  Leaving this as
+<strong>None</strong> produces a single column of points (useful for a simple
+strip chart or violin).  Selecting <strong>Column data</strong> lets you
+stratify samples by a sample-level covariate."
+      ),
+      c(
+        element = paste0("#", plot_name, "_", iSEE:::.featAssayXAxis),
+        intro = "If you select <strong>Column data</strong>..."
+      ),
+      c(
+        element = paste0("#", plot_name, "_", iSEE:::.featAssayXAxisColData,
+                         " + .selectize-control"),
+        intro = "... you can pick any valid <code>colData</code> field to
+place on the x-axis.  Numeric fields produce a scatter plot; factor or
+character fields produce grouped strips or violins.  Combined with
+<strong>Scatter + lines</strong>, trajectories connecting each altExp feature 
+        across samples."
+      )
+    ), stringsAsFactors = FALSE)
+  })
   
   list(
     .selectizeInput.iSEE(
@@ -823,3 +920,60 @@ setMethod(".generateDotPlot", "AltExpPlot", function(x, labels, envir) {
   list(plot = iSEE:::.textEval(plot_cmds, envir), commands = plot_cmds)
 })
 
+
+############################################################
+# Panel tour
+############################################################
+
+#' @importFrom iSEE .getEncodedName .getPanelColor .addTourStep .dataParamBoxOpen
+#'   .definePanelTour
+setMethod(".definePanelTour", "AltExpPlot", function(x) {
+  collated <- rbind(
+    c(
+      element = paste0("#", .getEncodedName(x)),
+      intro   = sprintf(
+        "The <font color=\"%s\">AltExp plot</font> panel displays assay values
+from an <em>alternative experiment</em> stored in a
+<code>SingleCellExperiment</code> object — for example precursor, PSM and/or 
+peptide log2-intensities for MS-based protemics; CITE-seq protein
+measurements; ATAC-seq peaks; or CRISPR guide capture data.
+<br><br>
+A feature from the <em>main</em> experiment is selected, and the panel uses a
+shared row annotation column (<em>Map column</em>) to retrieve the
+corresponding row(s) in the alternative experiment.  All matching altExp
+features are shown as separate points (or lines) per sample, making it easy
+to compare related measurements from different modalities side by side.",
+        .getPanelColor(x)
+      )
+    ),
+    c(
+      element = paste0("#", .getEncodedName(x)),
+      intro   = "Each point in the panel represents one
+<strong>(altExp feature, sample)</strong> combination.  When multiple altExp
+rows match the selected main-experiment feature — for example several
+precursors mapping to the same protein, or several isoforms or several 
+antibody-derived tags mapping to the same gene symbol —
+all of them appear simultaneously, distinguished by colour, shape, or a
+connecting line depending on your visual settings."
+    ),
+    .addTourStep(x, .dataParamBoxOpen,
+                 "The <i>Data parameters</i> box contains all controls specific to this
+panel.<br><br><strong>Action:</strong> click on this box to expand it and
+explore the available options.")
+  )
+  
+  parent_tour <- callNextMethod()
+  
+  parent_tour <- parent_tour[
+    !grepl("Feature assay plot", parent_tour$intro),
+  ]
+  
+  rbind(
+    data.frame(
+      element = collated[, 1],
+      intro = collated[, 2],
+      stringsAsFactors = FALSE
+    ),
+    parent_tour
+  )
+})
