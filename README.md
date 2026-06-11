@@ -23,15 +23,15 @@ Setting `dependencies = TRUE` should ensure that all packages, including the one
 
 ## Expanding the `iSEE` universe with `altSEE`
 
-- install `iSEE` first - the development version is recommended.
+- install `iSEE` first - a forked development version is recommended.
 
 ```r
-BiocManager::install("iSEE", version = "devel")
+BiocManager::install("statomics/iSEE")
 # or
-remotes::install_github("iSEE/iSEE")
+remotes::install_github("statomics/iSEE")
 ```
 
-- fork the `altSEE` repo (https://github.com/statomics/altSEEu) and clone it locally.
+- fork the `altSEE` repo (https://github.com/statomics/altSEE) and clone it locally.
 
 ```bash
 git clone https://github.com/[your_github_username]/altSEE.git
