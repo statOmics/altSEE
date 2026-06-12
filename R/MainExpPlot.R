@@ -54,15 +54,6 @@ setMethod("initialize", "MainExpPlot", function(.Object, ...) {
   do.call(callNextMethod, c(list(.Object), args))
 })
 
-
-
-#' @importFrom iSEE .emptyDefault
-setMethod("initialize", "MainExpPlot", function(.Object, ...) {
-  args <- list(...)
-  args <- .emptyDefault(args, "PlotType", "Auto")
-  do.call(callNextMethod, c(list(.Object), args))
-})
-
 #' Construct a MainExpPlot panel
 #'
 #' Creates an instance of the \code{\linkS4class{MainExpPlot}} class for use
@@ -89,12 +80,13 @@ setMethod("initialize", "MainExpPlot", function(.Object, ...) {
 #' XAxis = "Column data",
 #' XAxisColumnData = "sampleId")
 #' 
-#' # Example of iSEE instance with main and altExp
+#' # Example of iSEE instance with mainExp and altExp
+#' # linked via the "Proteins" in rowData columns of MainExp and AltExp 
 #' data("proteinsPeptidesSce")
 #' iSEE(
 #' sceProteinsPeptides,
 #' initial = list(
-#' RowDataTable(RowSelectionSource = "VolcanoPlot1"),
+#' RowDataTable(),
 #' MainExpPlot(YAxisFeatureSource = "RowDataTable1", 
 #'             PlotType = "Scatter + lines", 
 #'             XAxis = "Column data",
@@ -103,7 +95,9 @@ setMethod("initialize", "MainExpPlot", function(.Object, ...) {
 #'            AltAssay = "peptides_norm",
 #'            PlotType = "Scatter + lines", 
 #'            XAxis = "Column data", 
-#'            XAxisColumnData = "sampleId")
+#'            XAxisColumnData = "sampleId",
+#'            LookupColumn = "Proteins",
+#'            MapColumn = "Proteins")
 #' )
 #' )
 #' }

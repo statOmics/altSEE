@@ -28,20 +28,23 @@ AltExpPlot()
 
 # Pre-configure YAxisFeatureSource, AltAssay, PlotType, XAxis and 
 # XAxisColumnData
-# linked via the "Proteins" in rowData column, with lines connecting points
+# linked via the "Proteins" in rowData columns of MainExp and AltExp, 
+# with lines connecting points
 AltExpPlot(YAxisFeatureSource = "RowDataTable1", 
            AltAssay = "peptides_norm",
            PlotType = "Scatter + lines", 
            XAxis = "Column data", 
            XAxisColumnData = "sampleId",
-           MapColumn = "Proteins")
+           LookupColumn = "Proteins",
+           MapColumn = "Proteins"
+           )
            
 # Example of iSEE instance with main and altExp
 data("sceProteinsPeptides")
 iSEE(
 sceProteinsPeptides,
 initial = list(
-RowDataTable(RowSelectionSource = "VolcanoPlot1"),
+RowDataTable(),
 MainExpPlot(YAxisFeatureSource = "RowDataTable1", 
             PlotType = "Scatter + lines", 
             XAxis = "Column data",
@@ -51,6 +54,7 @@ AltExpPlot(YAxisFeatureSource = "RowDataTable1",
            PlotType = "Scatter + lines", 
            XAxis = "Column data", 
            XAxisColumnData = "sampleId",
+           LookupColumn = "Proteins",
            MapColumn = "Proteins")
 )
 )

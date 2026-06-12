@@ -1,1 +1,6 @@
+bub/
 .Rproj.user
+.claude/
+CLAUDE.md
+.mcp.json
+.DS_Store

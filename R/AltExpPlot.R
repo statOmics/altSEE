@@ -14,20 +14,27 @@
 #' assay values from an \emph{alternative experiment}
 #' (\code{\link[SingleCellExperiment]{altExp}}) stored inside a
 #' \code{\linkS4class{SingleCellExperiment}}.  Features in the altExp are
-#' linked to features in the main experiment through a shared annotation
-#' column (\code{MapColumn}), allowing e.g. protein abundances to
-#' be displayed alongside peptide or precursor abundances in the same iSEE 
-#' session.
+#' linked to features in the main experiment through annotation
+#' columns in the altExp (\code{MapColumn}) and mainExp (\code{LookupColumn}), 
+#' allowing the visualisation of e.g. protein abundances alongside peptide or 
+#' precursor abundances, RNA-seq alongside CITE-seq or ATAC-seq; in the same 
+#' iSEE session.
 #'
 #' @slot AltExp \code{character(1)}.  Name of the alternative experiment to
 #'   visualise (must be present in \code{altExpNames(se)}).
 #' @slot AltAssay \code{character(1)}.  Name of the assay within \code{AltExp}
 #'   whose values are shown on the y-axis.
+#' @slot LookupColumn \code{character(1)}.  Name of a \code{character} or
+#'   \code{factor} column in \code{rowData} of the \emph{main} experiment.
+#'   The value stored for the selected feature in this column is used as the
+#'   lookup key — for example \code{"Proteins"} when the main experiment holds
+#'   protein-level data identified by a column named "Proteins".
 #' @slot MapColumn \code{character(1)}.  Name of a \code{character} or
-#'   \code{factor} column that is present in \code{rowData} of \emph{both} the
-#'   main experiment and the selected \code{AltExp}.  The value stored for the
-#'   selected main-experiment feature is used to retrieve the matching row(s)
-#'   from the altExp.
+#'   \code{factor} column in \code{rowData} of the selected \code{AltExp}.
+#'   AltExp rows whose value in this column matches the key retrieved via
+#'   \code{LookupColumn} are shown — for example \code{"Proteins"} in a
+#'   peptide-level altExp that has the protein name stored in a column named 
+#'   "Proteins".
 #' @slot PlotType \code{character(1)}.  One of \code{"Auto"},
 #'   \code{"Scatter"}, or \code{"Scatter + lines"}.  \code{"Auto"} delegates
 #'   the choice to iSEE's internal heuristic; \code{"Scatter"} always uses a
@@ -52,10 +59,11 @@
 
 setClass("AltExpPlot", contains = "FeatureAssayPlot",
          slots = c(
-           AltExp    = "character",
-           AltAssay  = "character",
-           MapColumn = "character",
-           PlotType  = "character"
+           AltExp        = "character",
+           AltAssay      = "character",
+           LookupColumn  = "character",
+           MapColumn     = "character",
+           PlotType      = "character"
          ))
 
 #' @importFrom iSEE .validStringError
@@ -69,14 +77,15 @@ setValidity2("AltExpPlot", function(object) {
 #' @importFrom iSEE .emptyDefault .shapeByField .shapeByColDataTitle .shapeByColData
 setMethod("initialize", "AltExpPlot", function(.Object, ...) {
   args <- list(...)
-  args <- .emptyDefault(args, "AltExp",    NA_character_)
-  args <- .emptyDefault(args, "AltAssay",  NA_character_)
-  args <- .emptyDefault(args, "MapColumn", NA_character_)
-  args <- .emptyDefault(args, "PlotType",  "Auto")
+  args <- .emptyDefault(args, "AltExp",       NA_character_)
+  args <- .emptyDefault(args, "AltAssay",     NA_character_)
+  args <- .emptyDefault(args, "LookupColumn", NA_character_)
+  args <- .emptyDefault(args, "MapColumn",    NA_character_)
+  args <- .emptyDefault(args, "PlotType",     "Auto")
   args <- .emptyDefault(args, 
                         iSEE:::.shapeByField,   
                         iSEE:::.shapeByColDataTitle)
-  args <- .emptyDefault(args, iSEE:::.shapeByColData, "id")
+  args <- .emptyDefault(args, iSEE:::.shapeByColData, "altExp_feature_id")
   do.call(callNextMethod, c(list(.Object), args))
 })
 
@@ -109,14 +118,14 @@ setMethod(".refineParameters", "AltExpPlot", function(x, se) {
       !nzchar(slot(x, iSEE:::.shapeByColData)) ||
       slot(x, iSEE:::.shapeByColData) %in% colnames(colData(se))) {
     slot(x, iSEE:::.shapeByField)   <- iSEE:::.shapeByColDataTitle
-    slot(x, iSEE:::.shapeByColData) <- "id"
+    slot(x, iSEE:::.shapeByColData) <- "altExp_feature_id"
   }
   
   if (is.null(slot(x, iSEE:::.colorByColData)) ||
       !nzchar(slot(x, iSEE:::.colorByColData)) ||
       slot(x, iSEE:::.colorByColData) %in% colnames(colData(se))) {
     slot(x, iSEE:::.colorByField)   <- iSEE:::.colorByColDataTitle
-    slot(x, iSEE:::.colorByColData) <- "id"
+    slot(x, iSEE:::.colorByColData) <- "altExp_feature_id"
   }
   
   x
@@ -144,20 +153,23 @@ setMethod(".refineParameters", "AltExpPlot", function(x, se) {
 #'
 #' # Pre-configure YAxisFeatureSource, AltAssay, PlotType, XAxis and 
 #' # XAxisColumnData
-#' # linked via the "Proteins" in rowData column, with lines connecting points
+#' # linked via the "Proteins" in rowData columns of MainExp and AltExp, 
+#' # with lines connecting points
 #' AltExpPlot(YAxisFeatureSource = "RowDataTable1", 
 #'            AltAssay = "peptides_norm",
 #'            PlotType = "Scatter + lines", 
 #'            XAxis = "Column data", 
 #'            XAxisColumnData = "sampleId",
-#'            MapColumn = "Proteins")
+#'            LookupColumn = "Proteins",
+#'            MapColumn = "Proteins"
+#'            )
 #'            
 #' # Example of iSEE instance with main and altExp
 #' data("sceProteinsPeptides")
 #' iSEE(
 #' sceProteinsPeptides,
 #' initial = list(
-#' RowDataTable(RowSelectionSource = "VolcanoPlot1"),
+#' RowDataTable(),
 #' MainExpPlot(YAxisFeatureSource = "RowDataTable1", 
 #'             PlotType = "Scatter + lines", 
 #'             XAxis = "Column data",
@@ -167,6 +179,7 @@ setMethod(".refineParameters", "AltExpPlot", function(x, se) {
 #'            PlotType = "Scatter + lines", 
 #'            XAxis = "Column data", 
 #'            XAxisColumnData = "sampleId",
+#'            LookupColumn = "Proteins",
 #'            MapColumn = "Proteins")
 #' )
 #' )
@@ -205,15 +218,18 @@ setMethod(".defineDataInterface", "AltExpPlot", function(x, se, select_info) {
     unlist(lapply(all_altexps, function(nm) assayNames(altExp(se, nm))))
   }
   
-  # MapColumn: must exist in rowData of both main se and selected altExp,
-  # and be character/factor in the main se.
-  all_rowdata_colnames         <- colnames(rowData(se))
-  all_rowdata_colnames_altexp  <- colnames(rowData(altExp(se, current_ae)))
-  col_classes  <- sapply(rowData(se), class)
-  valid_mapcols <- all_rowdata_colnames[
-    (col_classes %in% c("character", "factor")) &
-      (all_rowdata_colnames %in% all_rowdata_colnames_altexp)
-  ]
+  # LookupColumn: rowname sentinel + character/factor columns in the main 
+  # experiment rowData.
+  # The value for the selected feature in this column is the join key.
+  main_rd_cls   <- sapply(rowData(se), class)
+  valid_lookcols <- c("(rowname)", 
+                      names(main_rd_cls)[main_rd_cls %in% 
+                                           c("character", "factor")])
+  
+  # MapColumn: character/factor columns in the altExp rowData.
+  # AltExp rows whose value matches the lookup key are shown.
+  ae_rd_cls     <- sapply(rowData(altExp(se, current_ae)), class)
+  valid_mapcols <- names(ae_rd_cls)[ae_rd_cls %in% c("character", "factor")]
   
   tab_by_row        <- select_info$single$feature
   column_covariates <- .getCachedCommonInfo(se, "ColumnDotPlot")$valid.colData.names
@@ -224,7 +240,9 @@ setMethod(".defineDataInterface", "AltExpPlot", function(x, se, select_info) {
   }
   
   # Tour steps for the y-axis feature selector and its linked controls
-  .addSpecificTour(class(x)[1], iSEE:::.featAssayYAxisFeatName, function(plot_name) {
+  .addSpecificTour(class(x)[1], 
+                   iSEE:::.featAssayYAxisFeatName, 
+                   function(plot_name) {
     data.frame(rbind(
       c(
         element = paste0("#", plot_name, "_", iSEE:::.featAssayYAxisFeatName,
@@ -272,14 +290,19 @@ normalised values, etc.  Only assays belonging to the currently selected
         alternative experiment are listed."
       ),
       c(
+        element = paste0("#", plot_name, "_LookupColumn + .selectize-control"),
+        intro = "Choose a <code>character</code> or <code>factor</code> column
+from the <em>main experiment</em> <code>rowData</code>.  The value stored for
+the selected feature in this column is used as the join key — for example
+<code>\"Proteins\"</code> when the main experiment holds protein-level data
+identified by a protein name column."
+      ),
+      c(
         element = paste0("#", plot_name, "_MapColumn + .selectize-control"),
-        intro = "This column must be present in <code>rowData</code> of both
-the main experiment and the selected alternative experiment.  The value stored
-for the chosen main-experiment feature is used to retrieve the corresponding
-row(s) from the altExp — for example a gene symbol shared between RNA and
-protein modalities, or the protein name shared between the precursor, peptide 
-and protein level assays.  Only <code>character</code> or <code>factor</code>
-columns that appear in both row annotation tables are offered here."
+        intro = "Choose a <code>character</code> or <code>factor</code> column
+from the <em>altExp</em> <code>rowData</code>.  AltExp rows whose value in
+this column matches the key read from the Lookup column are shown — for
+example <code>\"Proteins\"</code> in a peptide-level altExp."
       ),
       c(
         element = paste0("#", plot_name, "_PlotType"),
@@ -334,43 +357,49 @@ character fields produce grouped strips or violins.  Combined with
       choices  = tab_by_row,
       selected = iSEE:::.choose_link(slot(x, iSEE:::.featAssayYAxisRowTable), 
                                      tab_by_row)
-      ),
+    ),
     checkboxInput(
       .input_FUN(iSEE:::.featAssayYAxisFeatDynamic),
       label = "Use dynamic feature selection for the y-axis",
       value = slot(x, iSEE:::.featAssayYAxisFeatDynamic)
-      ),
+    ),
     selectInput(
       .input_FUN("AltExp"),
       label    = "AltExp:",
       choices  = all_altexps,
       selected = iSEE:::.choose_link(slot(x, "AltExp"), all_altexps)
-      ),
+    ),
     selectInput(
       .input_FUN("AltAssay"),
       label    = "Alt assay:",
       choices  = all_assays,
       selected = iSEE:::.choose_link(slot(x, "AltAssay"), all_assays)
-      ),
+    ),
+    selectInput(
+      .input_FUN("LookupColumn"),
+      label    = "Lookup column (main assay):",
+      choices  = valid_lookcols,
+      selected = iSEE:::.choose_link(slot(x, "LookupColumn"), valid_lookcols)
+    ),
     selectInput(
       .input_FUN("MapColumn"),
-      label    = "Map column:",
+      label    = "Map column (altExp):",
       choices  = valid_mapcols,
       selected = iSEE:::.choose_link(slot(x, "MapColumn"), valid_mapcols)
-      ),
+    ),
     selectInput(
       .input_FUN("PlotType"),
       label    = "Plot type:",
       choices  = c("Auto", "Scatter", "Scatter + lines"),
       selected = slot(x, "PlotType")
-      ),
+    ),
     .radioButtons.iSEE(
       x, iSEE:::.featAssayXAxis,
       label    = "X-axis:",
       inline   = TRUE,
       choices  = xaxis_choices,
       selected = slot(x, iSEE:::.featAssayXAxis)
-      ),
+    ),
     .conditionalOnRadio(
       .input_FUN(iSEE:::.featAssayXAxis),
       iSEE:::.featAssayXAxisColDataTitle,
@@ -379,8 +408,8 @@ character fields produce grouped strips or violins.  Combined with
         label    = "X-axis column data:",
         choices  = column_covariates,
         selected = slot(x, iSEE:::.featAssayXAxisColData)
-        )
-      ),
+      )
+    ),
     .conditionalOnRadio(
       .input_FUN(iSEE:::.featAssayXAxis),
       iSEE:::.featAssayXAxisFeatNameTitle,
@@ -390,39 +419,43 @@ character fields produce grouped strips or violins.  Combined with
         choices  = NULL,
         selected = NULL,
         multiple = FALSE
-        ),
+      ),
       selectInput(
         .input_FUN(iSEE:::.featAssayXAxisRowTable),
         label    = NULL,
         choices  = tab_by_row,
         selected = slot(x, iSEE:::.featAssayXAxisRowTable)
-        ),
+      ),
       checkboxInput(
         .input_FUN(iSEE:::.featAssayXAxisFeatDynamic),
         label = "Use dynamic feature selection for the x-axis",
         value = slot(x, iSEE:::.featAssayXAxisFeatDynamic)
-        )
       )
     )
-  })
+  )
+})
 
 #' @importFrom iSEE .getEncodedName .createUnprotectedParameterObservers
 setMethod(".createObservers", 
           "AltExpPlot", 
           function(x, se, input, session, pObjects, rObjects) {
-  callNextMethod()
-
-  plot_name <- .getEncodedName(x)
-
-  .createUnprotectedParameterObservers(
-    plot_name,
-    fields=c("AltExp", "AltAssay", "MapColumn", "PlotType"),
-    input=input, 
-    pObjects=pObjects, 
-    rObjects=rObjects)
-
-  invisible(NULL)
-})
+            callNextMethod()
+            
+            plot_name <- .getEncodedName(x)
+            
+            .createUnprotectedParameterObservers(
+              plot_name,
+              fields=c("AltExp", 
+                       "AltAssay", 
+                       "LookupColumn", 
+                       "MapColumn", 
+                       "PlotType"),
+              input=input,
+              pObjects=pObjects,
+              rObjects=rObjects)
+            
+            invisible(NULL)
+          })
 
 
 #' @importFrom iSEE .featAssayYAxisFeatName .featAssayXAxis
@@ -435,30 +468,36 @@ setMethod(".generateDotPlotData", "AltExpPlot", function(x, envir) {
   data_cmds <- list()
   
   gene_selected_y <- slot(x, iSEE:::.featAssayYAxisFeatName)
+  lookup_col      <- slot(x, "LookupColumn")
   map_col         <- slot(x, "MapColumn")
   alt_exp_name    <- slot(x, "AltExp")
   alt_assay_name  <- slot(x, "AltAssay")
   
+  pg_cmd <- if (identical(lookup_col, "(rowname)")) {
+    sprintf("pg <- %s;", deparse(gene_selected_y))
+  } else {
+    sprintf("pg <- rowData(se)[%s, %s];", deparse(gene_selected_y), deparse(lookup_col))
+  }
+
   data_cmds[["y"]] <- c(
     # Retrieve the altExp
     sprintf("ae <- altExp(se, %s);", deparse(alt_exp_name)),
+
+    # Join key: the feature's rowname when "(rowname)" is selected, 
+    # otherwise a rowData value
+    pg_cmd,
     
-    # Look up the mapping value for the selected feature directly by rowname —
-    # avoids the redundant which(%in%) pattern.
-    sprintf("pg <- rowData(se)[%s, %s];",
-            deparse(gene_selected_y), deparse(map_col)),
+    # Guard: stop early with an informative message
+    "if (length(pg) == 0 || all(is.na(pg))) stop('No value found in the Lookup column for the selected feature. Check the Lookup column setting.');",
     
-    # Guard: stop early with an informative message 
-    "if (length(pg) == 0 || all(is.na(pg))) stop('No mapping value found in rowData for the selected feature. Check the Map column setting.');",
-    
-    # Subset altExp rows whose MapColumn value matches
+    # Subset altExp rows whose MapColumn value matches the lookup key
     sprintf("alt <- ae[rowData(ae)[[%s]] %%in%% pg, ];", deparse(map_col)),
     
-    # Pivot to long format; 'id' is the altExp feature identifier
+    # Pivot to long format; 'altExp_feature_id' is the altExp feature identifier
     sprintf(paste0(
-      "plot.data <- data.frame(assay(alt, %s)) |>",
-      " tibble::rownames_to_column('id') |>",
-      " tidyr::pivot_longer(names_to = 'sample', values_to = 'Y', -'id');"
+      "plot.data <- as.data.frame.matrix(assay(alt, %s)) |>",
+      " tibble::rownames_to_column('altExp_feature_id') |>",
+      " tidyr::pivot_longer(names_to = 'sample', values_to = 'Y', -'altExp_feature_id');"
     ), deparse(alt_assay_name))
   )
   
@@ -477,11 +516,14 @@ setMethod(".generateDotPlotData", "AltExpPlot", function(x, envir) {
   
   data_cmds <- unlist(data_cmds)
   .textEval(data_cmds, envir)
-  
+
+  pg_value <- paste(get("pg", envir = envir), collapse = ", ")
+  plot_title <- if (pg_value == gene_selected_y) pg_value else sprintf("%s (%s)", pg_value, gene_selected_y)
+
   list(
     commands = data_cmds,
-    labels   = list(title = gene_selected_y, X = "", Y = alt_assay_name)
-    )
+    labels   = list(title = plot_title, X = "", Y = alt_assay_name)
+  )
 })
 
 ############################################################
@@ -503,9 +545,9 @@ setMethod(".addDotPlotDataColor", "AltExpPlot", function(x, envir) {
     covariate_name <- slot(x, iSEE:::.colorByColData)
     label <- covariate_name
     
-    cmds <- if (covariate_name == "id") {
-      # 'id' lives in plot.data itself, not in colData
-      "plot.data$ColorBy <- plot.data$id;"
+    cmds <- if (covariate_name == "altExp_feature_id") {
+      # 'altExp_feature_id' lives in plot.data itself, not in colData
+      "plot.data$ColorBy <- plot.data$altExp_feature_id;"
     } else {
       sprintf(
         "plot.data$ColorBy <- colData(se)[plot.data$sample, %s];",
@@ -518,7 +560,7 @@ setMethod(".addDotPlotDataColor", "AltExpPlot", function(x, envir) {
     assay_choice <- slot(x, iSEE:::.colorByFeatNameAssay)
     label <- sprintf("%s\n(%s)", chosen_gene, assay_choice)
     cmds  <- sprintf(
-      "plot.data$ColorBy <- rep(assay(se, %s)[%s, ], dplyr::n_distinct(plot.data$id));",
+      "plot.data$ColorBy <- rep(assay(se, %s)[%s, ], dplyr::n_distinct(plot.data$altExp_feature_id));",
       deparse(assay_choice), deparse(chosen_gene)
     )
     
@@ -559,9 +601,9 @@ setMethod(".addDotPlotDataShape", "AltExpPlot", function(x, envir) {
   
   if (shape_choice == iSEE:::.shapeByColDataTitle) {
     
-    if (covariate_name == "id") {
-      label <- "id"
-      cmds  <- "plot.data$ShapeBy <- plot.data$id;"
+    if (covariate_name == "altExp_feature_id") {
+      label <- "altExp_feature_id"
+      cmds  <- "plot.data$ShapeBy <- plot.data$altExp_feature_id;"
       
     } else if (covariate_name %in% colnames(colData(envir$se))) {
       label <- covariate_name
@@ -572,13 +614,13 @@ setMethod(".addDotPlotDataShape", "AltExpPlot", function(x, envir) {
       
     } else {
       # Covariate no longer present — fall back silently
-      label <- "id"
-      cmds  <- "plot.data$ShapeBy <- plot.data$id;"
+      label <- "altExp_feature_id"
+      cmds  <- "plot.data$ShapeBy <- plot.data$altExp_feature_id;"
     }
     
   } else {
-    label <- "id"
-    cmds  <- "plot.data$ShapeBy <- plot.data$id;"
+    label <- "altExp_feature_id"
+    cmds  <- "plot.data$ShapeBy <- plot.data$altExp_feature_id;"
   }
   
   iSEE:::.textEval(cmds, envir)
@@ -671,116 +713,118 @@ setMethod(".addDotPlotDataFacets", "AltExpPlot", function(x, envir) {
 setMethod(".defineVisualColorInterface", 
           "AltExpPlot", 
           function(x, se, select_info) {
-  all_assays <- iSEE:::.getCachedCommonInfo(se, "AltExpPlot")$valid.assay.names
-  
-  plot_name    <- iSEE:::.getEncodedName(x)
-  colorby_field <- paste0(plot_name, "_", iSEE:::.colorByField)
-  
-  colorby        <- iSEE:::.getDotPlotColorConstants(x)
-  mydim_single   <- iSEE:::.singleSelectionDimension(x)
-  otherdim_single <- setdiff(c("feature", "sample"), mydim_single)
-  mydim_choices  <- select_info[[mydim_single]]
-  otherdim_choices <- select_info[[otherdim_single]]
-  
-  covariates    <- iSEE:::.allowableColorByDataChoices(x, se)
-  color_choices <- iSEE:::.colorByNothingTitle
-  if (length(covariates)) {
-    color_choices <- c(color_choices, iSEE:::.colorByColDataTitle)
-  }
-  
-  tagList(
-    hr(),
-    iSEE:::.radioButtons.iSEE(
-      x, iSEE:::.colorByField,
-      label    = "Color by:",
-      inline   = TRUE,
-      choices  = color_choices,
-      selected = slot(x, iSEE:::.colorByField)
-    ),
-    iSEE:::.conditionalOnRadio(
-      colorby_field, iSEE:::.colorByNothingTitle,
-      colourpicker::colourInput(
-        paste0(plot_name, "_", iSEE:::.colorByDefaultColor),
-        label = NULL,
-        value = slot(x, iSEE:::.colorByDefaultColor)
-      )
-    ),
-    iSEE:::.conditionalOnRadio(
-      colorby_field, colorby$metadata$title,
-      selectInput(
-        paste0(plot_name, "_", colorby$metadata$field),
-        label    = NULL,
-        choices  = c("id", iSEE:::.allowableColorByDataChoices(x, se)),
-        selected = x[[colorby$metadata$field]]
-      )
-    ),
-    iSEE:::.conditionalOnRadio(
-      colorby_field, colorby$name$title,
-      selectizeInput(
-        paste0(plot_name, "_", colorby$name$field),
-        label = NULL, selected = NULL, choices = NULL, multiple = FALSE
-      ),
-      selectInput(
-        paste0(plot_name, "_", colorby$name$table),
-        label    = NULL,
-        choices  = mydim_choices,
-        selected = iSEE:::.choose_link(x[[colorby$name$table]], mydim_choices)
-      ),
-      colourpicker::colourInput(
-        paste0(plot_name, "_", colorby$name$color),
-        label = NULL,
-        value = x[[colorby$name$color]]
-      ),
-      checkboxInput(
-        paste0(plot_name, "_", colorby$name$dynamic),
-        label = sprintf("Use dynamic %s selection", mydim_single),
-        value = x[[colorby$name$dynamic]]
-      )
-    ),
-    iSEE:::.conditionalOnRadio(
-      colorby_field, colorby$assay$title,
-      selectizeInput(
-        paste0(plot_name, "_", colorby$assay$field),
-        label = NULL, choices = NULL, selected = NULL, multiple = FALSE
-      ),
-      selectInput(
-        paste0(plot_name, "_", colorby$assay$assay),
-        label    = NULL,
-        choices  = all_assays,
-        selected = x[[colorby$assay$assay]]
-      ),
-      selectInput(
-        paste0(plot_name, "_", colorby$assay$table),
-        label    = NULL,
-        choices  = otherdim_choices,
-        selected = iSEE:::.choose_link(x[[colorby$assay$table]], otherdim_choices)
-      ),
-      checkboxInput(
-        paste0(plot_name, "_", colorby$assay$dynamic),
-        label = sprintf("Use dynamic %s selection", otherdim_single),
-        value = x[[colorby$assay$dynamic]]
-      )
-    ),
-    iSEE:::.sliderInput.iSEE(
-      x, iSEE:::.selectTransAlpha,
-      label = "Unselected point opacity:",
-      min   = 0, max = 1,
-      value = slot(x, iSEE:::.selectTransAlpha)
-    )
-  )
-})
+            all_assays <- iSEE:::.getCachedCommonInfo(se, "AltExpPlot")$valid.assay.names
+            
+            plot_name    <- iSEE:::.getEncodedName(x)
+            colorby_field <- paste0(plot_name, "_", iSEE:::.colorByField)
+            
+            colorby        <- iSEE:::.getDotPlotColorConstants(x)
+            mydim_single   <- iSEE:::.singleSelectionDimension(x)
+            otherdim_single <- setdiff(c("feature", "sample"), mydim_single)
+            mydim_choices  <- select_info[[mydim_single]]
+            otherdim_choices <- select_info[[otherdim_single]]
+            
+            covariates    <- iSEE:::.allowableColorByDataChoices(x, se)
+            color_choices <- iSEE:::.colorByNothingTitle
+            if (length(covariates)) {
+              color_choices <- c(color_choices, iSEE:::.colorByColDataTitle)
+            }
+            
+            tagList(
+              hr(),
+              iSEE:::.radioButtons.iSEE(
+                x, iSEE:::.colorByField,
+                label    = "Color by:",
+                inline   = TRUE,
+                choices  = color_choices,
+                selected = slot(x, iSEE:::.colorByField)
+              ),
+              iSEE:::.conditionalOnRadio(
+                colorby_field, iSEE:::.colorByNothingTitle,
+                colourpicker::colourInput(
+                  paste0(plot_name, "_", iSEE:::.colorByDefaultColor),
+                  label = NULL,
+                  value = slot(x, iSEE:::.colorByDefaultColor)
+                )
+              ),
+              iSEE:::.conditionalOnRadio(
+                colorby_field, colorby$metadata$title,
+                selectInput(
+                  paste0(plot_name, "_", colorby$metadata$field),
+                  label    = NULL,
+                  choices  = c("altExp_feature_id", iSEE:::.allowableColorByDataChoices(x, se)),
+                  selected = x[[colorby$metadata$field]]
+                )
+              ),
+              iSEE:::.conditionalOnRadio(
+                colorby_field, colorby$name$title,
+                selectizeInput(
+                  paste0(plot_name, "_", colorby$name$field),
+                  label = NULL, selected = NULL, choices = NULL, multiple = FALSE
+                ),
+                selectInput(
+                  paste0(plot_name, "_", colorby$name$table),
+                  label    = NULL,
+                  choices  = mydim_choices,
+                  selected = iSEE:::.choose_link(x[[colorby$name$table]], mydim_choices)
+                ),
+                colourpicker::colourInput(
+                  paste0(plot_name, "_", colorby$name$color),
+                  label = NULL,
+                  value = x[[colorby$name$color]]
+                ),
+                checkboxInput(
+                  paste0(plot_name, "_", colorby$name$dynamic),
+                  label = sprintf("Use dynamic %s selection", mydim_single),
+                  value = x[[colorby$name$dynamic]]
+                )
+              ),
+              iSEE:::.conditionalOnRadio(
+                colorby_field, colorby$assay$title,
+                selectizeInput(
+                  paste0(plot_name, "_", colorby$assay$field),
+                  label = NULL, choices = NULL, selected = NULL, multiple = FALSE
+                ),
+                selectInput(
+                  paste0(plot_name, "_", colorby$assay$assay),
+                  label    = NULL,
+                  choices  = all_assays,
+                  selected = x[[colorby$assay$assay]]
+                ),
+                selectInput(
+                  paste0(plot_name, "_", colorby$assay$table),
+                  label    = NULL,
+                  choices  = otherdim_choices,
+                  selected = iSEE:::.choose_link(x[[colorby$assay$table]], otherdim_choices)
+                ),
+                checkboxInput(
+                  paste0(plot_name, "_", colorby$assay$dynamic),
+                  label = sprintf("Use dynamic %s selection", otherdim_single),
+                  value = x[[colorby$assay$dynamic]]
+                )
+              ),
+              iSEE:::.sliderInput.iSEE(
+                x, iSEE:::.selectTransAlpha,
+                label = "Unselected point opacity:",
+                min   = 0, max = 1,
+                value = slot(x, iSEE:::.selectTransAlpha)
+              )
+            )
+          })
 
 
 
-# Custom Shape interface: adds "id" as a shape-by option in addition to the
-# standard colData discrete covariates provided by the DotPlot parent class.
+# Custom Shape interface: adds "altExp_feature_id" as a shape-by option in 
+# addition to the standard colData discrete covariates provided by the DotPlot 
+# parent class.
 #' @importFrom iSEE .getEncodedName .shapeByField .shapeByNothingTitle
 #'   .getDiscreteMetadataChoices .getDotPlotShapeConstants .radioButtons.iSEE
 #'   .conditionalOnRadio
 #' @importFrom shiny hr tagList selectInput
 
 setMethod(".defineVisualShapeInterface", "AltExpPlot", function(x, se) {
-  discrete_covariates <- c("id", iSEE:::.getDiscreteMetadataChoices(x, se))
+  discrete_covariates <- c("altExp_feature_id", 
+                           iSEE:::.getDiscreteMetadataChoices(x, se))
   
   if (length(discrete_covariates)) {
     plot_name    <- iSEE:::.getEncodedName(x)
@@ -811,10 +855,10 @@ setMethod(".defineVisualShapeInterface", "AltExpPlot", function(x, se) {
   }
 })
 
+
 ############################################################
 # Plot generation
 ############################################################
-
 
 #' @importFrom iSEE .shapeByField .shapeByNothingTitle .buildAes
 #'   .set_colorby_when_none .addFacets .addCustomLabelsCommands
@@ -857,11 +901,11 @@ setMethod(".generateDotPlot", "AltExpPlot", function(x, labels, envir) {
                       violin_horizontal = do.call(iSEE:::.violin_plot, 
                                                   c(args, 
                                                     list(horizontal = TRUE)
-                                                    )
-                                                  ),
+                                                  )
+                      ),
                       scatter = do.call(iSEE:::.scatter_plot, args),
                       scatter2 = do.call(.scatter_plot2, args)
-                      )
+  )
   
   # Shape scale: use n_distinct to get the right number of shapes
   if (slot(x, iSEE:::.shapeByField) != iSEE:::.shapeByNothingTitle) {
@@ -883,13 +927,13 @@ setMethod(".generateDotPlot", "AltExpPlot", function(x, labels, envir) {
       color = color_set, group = TRUE,
       alt   = c(color = iSEE:::.set_colorby_when_none(x))
     )
-    # Map GroupBy --> id (the altExp feature identifier)
-    aes_line <- gsub("GroupBy", "id", aes_line, fixed = TRUE)
+    # Map GroupBy --> altExp_feature_id (the altExp feature identifier)
+    aes_line <- gsub("GroupBy", "altExp_feature_id", aes_line, fixed = TRUE)
     plot_cmds[[N]] <- paste(plot_cmds[[N]], "+")
     plot_cmds[["geom_line"]] <- sprintf(
       "geom_line(data = plot.data, mapping = %s)", 
       aes_line
-      )
+    )
   }
   
   # Faceting
@@ -904,7 +948,7 @@ setMethod(".generateDotPlot", "AltExpPlot", function(x, labels, envir) {
     x, 
     commands = plot_cmds,
     plot_type = plot_type
-    )
+  )
   
   if (plot_type == "scatter") {
     plot_cmds <- iSEE:::.addLabelCentersCommands(x, commands = plot_cmds)
@@ -915,8 +959,14 @@ setMethod(".generateDotPlot", "AltExpPlot", function(x, labels, envir) {
     flip   = (plot_type == "violin_horizontal"),
     envir  = envir,
     commands = plot_cmds
-    )
-  
+  )
+
+  if (dplyr::n_distinct(plot_data$altExp_feature_id) > 10) {
+    N <- length(plot_cmds)
+    plot_cmds[[N]] <- paste(plot_cmds[[N]], "+")
+    plot_cmds[["no_legend"]] <- "theme(legend.position = 'none')"
+  }
+
   list(plot = iSEE:::.textEval(plot_cmds, envir), commands = plot_cmds)
 })
 
@@ -939,10 +989,11 @@ peptide log2-intensities for MS-based protemics; CITE-seq protein
 measurements; ATAC-seq peaks; or CRISPR guide capture data.
 <br><br>
 A feature from the <em>main</em> experiment is selected, and the panel uses a
-shared row annotation column (<em>Map column</em>) to retrieve the
-corresponding row(s) in the alternative experiment.  All matching altExp
-features are shown as separate points (or lines) per sample, making it easy
-to compare related measurements from different modalities side by side.",
+row annotation columns (<em>Map column</em>) from the AltExp and the MainExp
+(<em> Lookup column<em>) to retrieve the corresponding row(s) in the alternative 
+experiment.  All matching altExp features are shown as separate points (or 
+lines) per sample, making it easy to compare related measurements from different 
+modalities side by side.",
         .getPanelColor(x)
       )
     ),
@@ -957,9 +1008,10 @@ all of them appear simultaneously, distinguished by colour, shape, or a
 connecting line depending on your visual settings."
     ),
     .addTourStep(x, .dataParamBoxOpen,
-                 "The <i>Data parameters</i> box contains all controls specific to this
-panel.<br><br><strong>Action:</strong> click on this box to expand it and
-explore the available options.")
+                 "The <i>Data parameters</i> box contains all controls specific 
+                 to this panel.<br><br><strong>Action:</strong> click on this 
+                 box to expand it and explore the available options."
+                  )
   )
   
   parent_tour <- callNextMethod()

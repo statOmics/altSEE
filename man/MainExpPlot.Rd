@@ -33,12 +33,13 @@ PlotType = "Scatter + lines",
 XAxis = "Column data",
 XAxisColumnData = "sampleId")
 
-# Example of iSEE instance with main and altExp
+# Example of iSEE instance with mainExp and altExp
+# linked via the "Proteins" in rowData columns of MainExp and AltExp 
 data("proteinsPeptidesSce")
 iSEE(
 sceProteinsPeptides,
 initial = list(
-RowDataTable(RowSelectionSource = "VolcanoPlot1"),
+RowDataTable(),
 MainExpPlot(YAxisFeatureSource = "RowDataTable1", 
             PlotType = "Scatter + lines", 
             XAxis = "Column data",
@@ -47,7 +48,9 @@ AltExpPlot(YAxisFeatureSource = "RowDataTable1",
            AltAssay = "peptides_norm",
            PlotType = "Scatter + lines", 
            XAxis = "Column data", 
-           XAxisColumnData = "sampleId")
+           XAxisColumnData = "sampleId",
+           LookupColumn = "Proteins",
+           MapColumn = "Proteins")
 )
 )
 }

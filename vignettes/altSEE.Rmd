@@ -211,7 +211,9 @@ shenAltExpApp <- iSEE(
                 PlotType = "Scatter + lines", 
                 XAxis = "Column data", 
                 XAxisColumnData = "sampleId", 
-                MapColumn = "Proteins")
+                LookupColumn = "Proteins",
+                MapColumn = "Proteins"
+              )
   )
 )
 ```

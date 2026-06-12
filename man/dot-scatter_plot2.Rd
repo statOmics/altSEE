@@ -2,7 +2,7 @@
 % Please edit documentation in R/scatter_plot2.R
 \name{.scatter_plot2}
 \alias{.scatter_plot2}
-\title{Base scatter renderer for AltExpPlot and MainExpPlot}
+\title{Base scatter plot renderer for AltExpPlot and MainExpPlot}
 \usage{
 .scatter_plot2(
   plot_data,

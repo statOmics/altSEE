@@ -1,8 +1,8 @@
 ###########################################################################
-# scatter_plot2 — base scatter renderer for AltExpPlot and MainExpPlot
+# scatter_plot2 — base scatter plot renderer for AltExpPlot and MainExpPlot
 ###########################################################################
 
-#' Base scatter renderer for AltExpPlot and MainExpPlot
+#' Base scatter plot renderer for AltExpPlot and MainExpPlot
 #'
 #' An internal helper that produces a \pkg{ggplot2} command list for a scatter
 #' plot of long-format altExp data.  It is called by the

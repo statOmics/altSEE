@@ -9,10 +9,11 @@ An S4 class that extends \code{\linkS4class{FeatureAssayPlot}} to plot
 assay values from an \emph{alternative experiment}
 (\code{\link[SingleCellExperiment]{altExp}}) stored inside a
 \code{\linkS4class{SingleCellExperiment}}.  Features in the altExp are
-linked to features in the main experiment through a shared annotation
-column (\code{MapColumn}), allowing e.g. protein abundances to
-be displayed alongside peptide or precursor abundances in the same iSEE 
-session.
+linked to features in the main experiment through annotation
+columns in the altExp (\code{MapColumn}) and mainExp (\code{LookupColumn}), 
+allowing the visualisation of e.g. protein abundances alongside peptide or 
+precursor abundances, RNA-seq alongside CITE-seq or ATAC-seq; in the same 
+iSEE session.
 }
 \section{Slots}{
 
@@ -23,11 +24,18 @@ visualise (must be present in \code{altExpNames(se)}).}
 \item{\code{AltAssay}}{\code{character(1)}.  Name of the assay within \code{AltExp}
 whose values are shown on the y-axis.}
 
+\item{\code{LookupColumn}}{\code{character(1)}.  Name of a \code{character} or
+\code{factor} column in \code{rowData} of the \emph{main} experiment.
+The value stored for the selected feature in this column is used as the
+lookup key — for example \code{"Proteins"} when the main experiment holds
+protein-level data identified by a column named "Proteins".}
+
 \item{\code{MapColumn}}{\code{character(1)}.  Name of a \code{character} or
-\code{factor} column that is present in \code{rowData} of \emph{both} the
-main experiment and the selected \code{AltExp}.  The value stored for the
-selected main-experiment feature is used to retrieve the matching row(s)
-from the altExp.}
+\code{factor} column in \code{rowData} of the selected \code{AltExp}.
+AltExp rows whose value in this column matches the key retrieved via
+\code{LookupColumn} are shown — for example \code{"Proteins"} in a
+peptide-level altExp that has the protein name stored in a column named 
+"Proteins".}
 
 \item{\code{PlotType}}{\code{character(1)}.  One of \code{"Auto"},
 \code{"Scatter"}, or \code{"Scatter + lines"}.  \code{"Auto"} delegates
