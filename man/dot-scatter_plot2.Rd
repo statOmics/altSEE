@@ -2,7 +2,7 @@
 % Please edit documentation in R/scatter_plot2.R
 \name{.scatter_plot2}
 \alias{.scatter_plot2}
-\title{Base scatter plot renderer for AltExpPlot and MainExpPlot}
+\title{Base scatter plot renderer for LinkedFeaturesAssayPlot}
 \usage{
 .scatter_plot2(
   plot_data,
@@ -20,13 +20,13 @@
 }
 \arguments{
 \item{plot_data}{\code{data.frame}.  Long-format plot data as produced by
-\code{.generateDotPlotData} for \code{AltExpPlot}.  Must contain columns
-\code{id}, \code{sample}, \code{X}, \code{Y}, and optionally
-\code{ColorBy}, \code{ShapeBy}, \code{SizeBy}, \code{SelectBy}.}
+\code{.generateDotPlotData} for \code{LinkedFeaturesAssayPlot}.  Must
+contain columns \code{id}, \code{sample}, \code{X}, \code{Y}, and
+optionally \code{ColorBy}, \code{ShapeBy}, \code{SizeBy}, \code{SelectBy}.}
 
-\item{param_choices}{An \code{\linkS4class{AltExpPlot}} object carrying the
-current panel parameters (used to extract colour/shape/size/font
-settings).}
+\item{param_choices}{A \code{\linkS4class{LinkedFeaturesAssayPlot}} object
+carrying the current panel parameters (used to extract
+colour/shape/size/font settings).}
 
 \item{x_lab, y_lab}{\code{character(1)}.  Axis labels.}
 
@@ -57,16 +57,18 @@ A named \code{character} vector of \pkg{ggplot2} commands (one
 \description{
 An internal helper that produces a \pkg{ggplot2} command list for a scatter
 plot of long-format altExp data.  It is called by the
-\code{.generateDotPlot} method for \code{\linkS4class{AltExpPlot}} whenever
-\code{PlotType} is \code{"Scatter"} or \code{"Scatter + lines"}.
+\code{.generateDotPlot} method for
+\code{\linkS4class{LinkedFeaturesAssayPlot}} whenever \code{PlotType} is
+\code{"Scatter"} or \code{"Scatter + lines"}.
 }
 \details{
 Unlike the standard \pkg{iSEE} scatter plot helpers, this function operates
 on the \emph{long-format} \code{plot.data} produced by
-\code{.generateDotPlotData} for \code{AltExpPlot}: the data frame contains
-one row per (feature, sample) combination, with columns \code{id}
-(altExp feature name), \code{sample} (column name in the main
-\code{SingleCellExperiment}), \code{X}, and \code{Y}.
+\code{.generateDotPlotData} for \code{LinkedFeaturesAssayPlot}: the data
+frame contains one row per (feature, sample) combination, with columns
+\code{altExp_feature_id} (the visualised feature's identifier),
+\code{sample} (column name in the main \code{SingleCellExperiment}),
+\code{X}, and \code{Y}.
 
 If more than 1 000 distinct features are present — which typically
 indicates a misconfigured \code{MapColumn} — the function returns a

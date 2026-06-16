@@ -1,0 +1,461 @@
+---
+title: "Visualising paired scRNA-seq and scATAC-seq data with altSEE"
+author:
+  - name: "Lieven Clement"
+    affiliation: "statOmics, Ghent University"
+date: "`r Sys.Date()`"
+package: altSEE
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    fig_caption: true
+vignette: >
+  %\VignetteIndexEntry{Visualising paired scRNA-seq and scATAC-seq data with altSEE}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  collapse = TRUE,
+  comment  = "#>"
+)
+```
+
+# Introduction
+
+The `altSEE` package extends the `iSEE` interactive visualisation framework
+to support exploration of data stored in *alternative
+experiments* (`altExp`) within a `SingleCellExperiment` (SCE) object.
+The key idea is that a "main" modality (e.g. RNA expression) and a
+"secondary" modality measured on the same cells (e.g. chromatin accessibility,
+surface proteomics) can be linked through a shared feature identifier —
+most naturally, a **gene symbol** — so that selecting a gene in the RNA
+panel immediately pulls up the related features from the secondary modality.
+
+In the mass spectrometry-based proteomics vignette included with `altSEE`, 
+the link is the **protein** that maps proteins to there corresponding peptides.
+
+This vignette demonstrates the same concept for **single-cell multiomics**:
+the main experiment contains scRNA-seq gene-level counts, while the `altExp`
+holds scATAC-seq chromatin-accessibility peaks annotated to their nearest gene 
+or vice versa. 
+
+Selecting a gene of interest in the RNA panel therefore reveals all ATAC peaks
+in its vicinity, enabling direct visual comparison of chromatin openness and
+transcript abundance across cell types.
+
+We use a subset of the 10X Genomics PBMC Multiome dataset  distributed via the
+`SingleCellMultiModal` Bioconductor package.
+
+## Overview
+
+- Load paired scRNA-seq / scATAC-seq data from `SingleCellMultiModal`
+  and restructure it as an SCE with an `altExp`.
+- Annotate ATAC peaks with the nearest gene symbol using
+  `GenomicRanges` and `EnsDb.Hsapiens.v86`.
+- Run lightweight QC, normalisation and dimensionality reduction on
+  both modalities.
+- Launch an `altSEE` app that links gene expression to chromatin
+  accessibility interactively.
+
+## Loading packages
+
+```{r libraries}
+suppressPackageStartupMessages({
+library(altSEE)            # the package we are showcasing
+library(iSEE)              # underlying interactive framework
+
+library(SingleCellMultiModal)
+library(MultiAssayExperiment)
+library(SingleCellExperiment)
+
+library(scran)
+library(scater)
+library(scuttle)
+library(GenomeInfoDb)        # <-- adds keepSeqlevels, seqlevelsStyle, etc.
+library(GenomicRanges)
+library(EnsDb.Hsapiens.v86)
+
+library(BiocParallel)
+})
+set.seed(42)
+```
+
+# Data
+
+
+A subset of the data for 500 cells.  
+
+```{r load-mae, cache=TRUE}
+data(mae)
+mae
+```
+
+The object is a `MultiAssayExperiment` containing two `SingleCellExperiment`
+objects: `rna` (36 549 genes × 499 cells) and `atac` (108 344 peaks ×
+499 cells).
+All cells are matched — each barcode in `rna` corresponds to the same barcode
+in `atac`.
+
+```{r inspect-mae}
+# Dimensions of each modality
+lapply(experiments(mae), dim)
+
+# Cell-type labels provided by 10X R&D
+table(mae$celltype)
+```
+```{r}
+sce_rna  <- mae[["rna"]]
+sce_atac <- mae[["atac"]]
+```
+
+# Peak–gene annotation
+
+ATAC peak row names carry genomic coordinates (`chr1:827203-827972`) rather
+than gene names.
+To enable gene-centric linking in altSEE, we annotate each peak with the
+**nearest gene symbol** using `GenomicRanges` and the human Ensembl annotation
+database `EnsDb.Hsapiens.v86` (GRCh38).
+
+We also record the *distance to the nearest transcription start site* (TSS)
+and whether the peak falls within the gene body.
+These annotations are stored in `rowData(sce_atac)` and drive the altSEE
+linking logic.
+
+```{r annotate-peaks, cache=TRUE}
+edb <- EnsDb.Hsapiens.v86
+
+# 1. Parse peak coordinates into a GRanges object
+peak_gr <- GRanges(rownames(sce_atac))
+
+# Ensure chromosome style matches between peaks and EnsDb
+# (EnsDb uses "1", "2", …; 10X peaks use "chr1", "chr2", …)
+seqlevelsStyle(peak_gr) <- "Ensembl"  # strips "chr" prefix
+
+#2. Retrieve gene-level GRanges from EnsDb 
+genes_gr <- genes(edb, columns = c("gene_name", "gene_biotype"))
+
+# Only keep chromosomes present in BOTH genes_gr and peak_gr
+std_chroms <- seqlevels(genes_gr)[!grepl("_|\\.", seqlevels(genes_gr))]
+std_chroms <- intersect(std_chroms, seqlevels(peak_gr))  # <-- add this line
+
+genes_gr   <- keepSeqlevels(genes_gr, std_chroms, pruning.mode = "coarse")
+peak_gr    <- keepSeqlevels(peak_gr,  std_chroms, pruning.mode = "coarse")
+
+# 3. Find nearest gene for each peak 
+nearest_idx      <- nearest(peak_gr, genes_gr)
+rowData(sce_atac)$nearestGene <- genes_gr$gene_name[nearest_idx]
+
+# 4. Distance from peak midpoint to TSS 
+tss_gr <- resize(genes_gr, width = 1, fix = "start")
+dist_hits <- distanceToNearest(peak_gr, tss_gr)
+rowData(sce_atac)$distToTSS <- mcols(dist_hits)$distance
+
+# 5. Flag promoter peaks (within 2 kb of TSS) 
+rowData(sce_atac)$isPromoter <- rowData(sce_atac)$distToTSS <= 2000
+
+# 6. Preview annotation
+head(as.data.frame(rowData(sce_atac)[, c("nearestGene", "distToTSS", "isPromoter")]))
+```
+
+```{r peaks-per-gene}
+# How many ATAC peaks are annotated per gene?
+peaks_per_gene <- table(rowData(sce_atac)$nearestGene)
+summary(as.integer(peaks_per_gene))
+```
+
+---
+
+# Quality control
+
+## RNA quality control
+
+Standard scRNA-seq QC: we flag cells with extreme total counts, extreme gene
+detection, or high mitochondrial fraction.
+
+```{r qc-rna}
+# Get mitochondrial gene names directly from EnsDb
+mt_gene_names <- genes_gr$gene_name[as.character(seqnames(genes_gr)) == "MT"]
+
+# Then find which rows of sce_rna are mitochondrial
+mt_genes <- which(rownames(sce_rna) %in% mt_gene_names)
+cat("Mitochondrial genes found in sce_rna:", length(mt_genes), "\n")
+
+rna_qc <- perCellQCMetrics(sce_rna, subsets = list(Mito = mt_genes))
+rna_qc_filter <- quickPerCellQC(rna_qc, percent_subsets = "subsets_Mito_percent")
+
+# Attach QC metrics for later visualisation
+colData(sce_rna) <- cbind(colData(sce_rna), rna_qc)
+                          
+cat("RNA: removing", sum(rna_qc_filter$discard), "low-quality cells\n")
+sce_rna <- sce_rna[, !rna_qc_filter$discard]
+```
+
+## ATAC quality control
+
+For scATAC-seq we apply a minimum-fragments-per-cell filter.
+A thorough pipeline would also compute TSS enrichment and nucleosome signal
+(available in packages such as `ArchR` or `Signac`); here we keep it simple.
+
+```{r qc-atac}
+atac_qc <- perCellQCMetrics(sce_atac)
+
+# Keep cells with at least 1 000 detected peaks
+keep_atac <- atac_qc$detected >= 1000
+cat("ATAC: removing", sum(!keep_atac), "low-quality cells\n")
+colData(sce_atac) <- cbind(colData(sce_atac), atac_qc)
+sce_atac <- sce_atac[, keep_atac]
+
+```
+
+## Intersect cells passing QC in both modalities
+
+```{r intersect-cells}
+common_cells <- intersect(colnames(sce_rna), colnames(sce_atac))
+cat("Cells passing QC in both modalities:", length(common_cells), "\n")
+
+sce_rna  <- sce_rna[,  common_cells]
+sce_atac <- sce_atac[, common_cells]
+```
+
+---
+
+# Normalisation
+
+## RNA: scran pooling normalisation
+
+```{r norm-rna, cache=TRUE}
+# Quick clustering to guide pooling
+clusters_rna <- quickCluster(sce_rna, min.size = 50)
+sce_rna <- computeSumFactors(sce_rna, clusters = clusters_rna)
+sce_rna <- logNormCounts(sce_rna)
+```
+
+## ATAC: TF-IDF normalisation
+
+For scATAC-seq data the counts are near-binary (0/1 per peak per cell);
+log-normalisation is inappropriate.
+Term Frequency–Inverse Document Frequency (TF-IDF) is the standard approach:
+it up-weights rare accessible peaks while down-weighting peaks open in
+virtually every cell.
+
+```{r norm-atac}
+# TF-IDF implemented manually (or use ArchR / Signac for production)
+tfidf <- function(mat) {
+    # mat: features x cells sparse matrix
+    # TF: normalise each cell to unit sum
+    tf  <- t(t(mat) / colSums(mat))
+    # IDF: log(1 + N / rowSums)
+    idf <- log1p(ncol(mat) / (rowSums(mat > 0) + 1))
+    tf * idf
+}
+
+counts_atac           <- counts(sce_atac)
+tfidf_mat             <- tfidf(counts_atac)
+assay(sce_atac, "tfidf") <- tfidf_mat
+```
+
+---
+
+# Dimensionality reduction
+
+## RNA: PCA and UMAP
+
+```{r dimred-rna, cache=TRUE}
+# Select highly variable genes
+dec_rna <- modelGeneVar(sce_rna)
+hvg_rna <- getTopHVGs(dec_rna, n = 2000)
+
+sce_rna <- runPCA(sce_rna, subset_row = hvg_rna, ncomponents = 30)
+sce_rna <- runUMAP(sce_rna, dimred = "PCA", n_neighbors = 30, min_dist = 0.3)
+```
+
+## ATAC: LSI (truncated SVD on TF-IDF) and UMAP
+
+Latent Semantic Indexing (LSI) is the scATAC-seq analogue of PCA.
+We use the TF-IDF matrix and `irlba`-based SVD.
+
+```{r dimred-atac, cache=TRUE}
+# Select top variable peaks by standard deviation of TF-IDF scores
+peak_sds  <- rowSds(as.matrix(assay(sce_atac, "tfidf")))
+top_peaks <- order(peak_sds, decreasing = TRUE)[seq_len(20000)]
+
+# Truncated SVD (LSI)
+lsi_res <- irlba::irlba(
+    t(assay(sce_atac, "tfidf")[top_peaks, ]),
+    nv = 30
+)
+lsi_embed <- lsi_res$u %*% diag(lsi_res$d)
+rownames(lsi_embed) <- colnames(sce_atac)
+colnames(lsi_embed) <- paste0("LSI", seq_len(ncol(lsi_embed)))
+
+# Store in SCE and compute UMAP — drop first LSI component (correlated with
+# sequencing depth, analogous to PC1 in bulk ATAC)
+reducedDim(sce_atac, "LSI") <- lsi_embed[, -1]
+sce_atac <- runUMAP(sce_atac, dimred = "LSI",
+                    n_neighbors = 30, min_dist = 0.3,
+                    name = "UMAP")
+```
+
+# Building the altSEE-ready SCE object
+
+`altSEE` expects the ATAC experiment to live as an `altExp` inside the RNA
+SCE.
+The linking column, `nearestGene` in `rowData(altExp(...))`, can be used in 
+altSEE to map peaks that belong to each gene selected in the RNA panel.
+
+```{r build-sce}
+# Subset ATAC peaks to those with a valid gene annotation 
+valid_peak <- !is.na(rowData(sce_atac)$nearestGene)
+sce_atac_annot <- sce_atac[valid_peak, ]
+cat("Annotated peaks:", nrow(sce_atac_annot),
+    "of", nrow(sce_atac), "total peaks\n")
+
+# Nest ATAC as altExp inside RNA SCE 
+altExp(sce_rna, "ATAC") <- sce_atac_annot
+
+# Confirm structure
+sce_rna
+```
+
+```{r confirm-altexp}
+# The altExp is accessible via altExp()
+altExp(sce_rna, "ATAC")
+```
+
+```{r check-linking}
+# Linking field: nearestGene maps each ATAC peak to a gene name
+head(rowData(altExp(sce_rna, "ATAC"))$nearestGene)
+```
+
+
+
+# Launching the altSEE app
+
+## Configuring the initial panel layout
+
+We configure a six-panel layout that illustrates the altSEE workflow:
+
+1. **ReducedDimensionPlot** — UMAP of cells coloured by cell type from the main assay (RNA).
+2. **AltExpReducedDimensionPlot** — UMAP of cells coloured by cell type from the AltExp (ATAC).
+3. **RowDataTable** (RNA) — searchable gene table; clicking a row can drive
+   the RNA panel and the ATAC panel plots (current default).
+4. **ATAC-RowDataTable** (ATAC) — searchable gene table; clicking a row can drive the RNA panel and the ATAC panel plots.
+3. **LinkedFeaturesAssayPlot** (RNA, main experiment) — expression of the
+   selected gene across cells.
+4. **LinkedFeaturesAssayPlot** (ATAC, altExp) — ATAC accessibility for all
+   peaks annotated to a selected gene, displayed as a violin/dot plot per
+   cell type.
+
+
+```{r configure-app}
+# Panel 1: UMAP coloured by cell type
+rdp <- ReducedDimensionPlot(
+    Type            = "UMAP",
+    ColorBy         = "Column data",
+    ColorByColumnData = "celltype",
+    PanelWidth      = 6L
+)
+# Panel 2: AltExp UMAP coloured by cell type
+ardp <- AltExpReducedDimensionPlot(
+    Type            = "UMAP",
+    ColorBy         = "Column data",
+    ColorByColumnData = "celltype",
+    PanelWidth      = 6L
+)
+
+
+# Panel 3: Searchable gene table
+rdt <- RowDataTable(
+    Selected   = "CD14",
+    Search     = "CD14",
+    PanelWidth = 6L
+)
+
+# Panel 4: Searchable AltExp table
+ardt <- AltExpRowDataTable(
+    PanelWidth = 6L
+)
+
+# Panel 5: altSEE RNA panel. LinkedFeaturesAssayPlot defines a Selection
+# Experiment (altExp or main experiment) with a lookupColumn and a 
+# Visualisation Experiment (altExp or main experiment) with a MapColumn. All
+# features in the Visualisation experiment that map via the MapColum to the 
+# selected feature in the Selection experiment via the lookupColumn are 
+# visualised. Here we initialise the SelectionAltExp and the AltExp for 
+# visualisation both with the (Main experiment). The plot then simply 
+# visualizes features of the Main experiment. In the app the user can then 
+# change the SelectionAltExp if they want to visualise the main exp through # a linked AltExp, e.g. ATAC AltExp.
+mlfap <- LinkedFeaturesAssayPlot(
+    SelectionAltExp    = "(Main experiment)",
+    LookupColumn       = "(rowname)",
+    AltExp             = "(Main experiment)",
+    AltAssay           = "logcounts",
+    MapColumn          = "(rowname)",
+    XAxis              = "Column data",
+    XAxisColumnData    = "celltype",
+    ColorBy            = "Column data",
+    ColorByColumnData  = "celltype",
+    YAxisFeatureSource = "RowDataTable1", # driven by gene selection in table
+    PanelWidth         = 6L
+)
+
+
+# Panel 6: altSEE ATAC panel — peaks linked to selected gene in main 
+# experiment
+alfap <- LinkedFeaturesAssayPlot(
+    SelectionAltExp    = "(Main experiment)",
+    LookupColumn       = "(rowname)",
+    YAxisFeatureSource = "RowDataTable1", # driven by gene selection in table
+    AltExp             = "ATAC",
+    AltAssay           = "tfidf",
+    XAxis              = "Column data",
+    XAxisColumnData    = "celltype",
+    ColorBy            = "Column data",
+    ColorByColumnData  = "celltype",
+    MapColumn          = "nearestGene",
+    PanelWidth         = 6L
+)
+
+
+
+initial_panels <- list(rdp, ardp, rdt, ardt, mlfap, alfap)
+```
+
+## Running the app
+
+```{r launch-app, eval=FALSE}
+app <- iSEE(
+    se      = sce_rna,
+    initial = initial_panels
+)
+
+if (interactive()) {
+    shiny::runApp(app, launch.browser = TRUE)
+}
+```
+
+The app opens with **CD14** pre-selected (a canonical monocyte marker).
+The ATAC panel on the right immediately shows all peaks annotated to *CD14*,
+coloured by cell type.
+
+
+Try searching for **CD3D** (T-cell
+marker), or **GNLY** (NK cell) in the gene table — the RNA and ATAC panels
+update simultaneously.
+
+
+
+# Session information
+
+```{r session-info}
+sessionInfo()
+```
+

@@ -1,0 +1,336 @@
+---
+title: altSEE panels - illustrated for proteomics data analysis
+author:
+- name: Lieven Clement
+  affiliation: 
+  - Ghent University.
+  email: lieven.clement@ugent.be
+  
+date: "`r BiocStyle::doc_date()`"
+package: altSEE
+output: BiocStyle::html_document
+vignette: >
+  %\VignetteIndexEntry{Panel universe}
+  %\VignetteEncoding{UTF-8}  
+  %\VignettePackage{altSEE}
+  %\VignetteKeywords{GeneExpression, proteomics, Visualization, QualityControl, GUI}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(error=FALSE, warning=FALSE, message=FALSE)
+library("BiocStyle")
+```
+
+```{r, eval=!exists("SCREENSHOT"), include=FALSE}
+SCREENSHOT <- function(x, ...) knitr::include_graphics(x, dpi = NA)
+```
+
+# Overview
+
+The `r Biocpkg("iSEE")` package provides a general and flexible framework for interactively exploring `SummarizedExperiment` objects.
+However, in many cases, more specialized panels are required for effective visualization of specific data types.
+The `altSEE` package extends the `iSEE` interactive visualisation framework
+to support exploration of data stored in *alternative
+experiments* (`altExp`) within a `SingleCellExperiment` (SCE) object.
+
+This vignette illustrates `altSEE` on mass spectrometry-based proteomics. 
+Particularly we will use the **protein** to link protein abundances in the main 
+experiment that were obtained upon summarisation of their corresponding peptides 
+that are stored in the altExp.
+
+We first load in the package:
+
+```{r}
+library("iSEEu")
+library("altSEE")
+library("QFeatures")
+library("msqrob2")
+library("SingleCellExperiment")
+library("scater")
+library("BiocFileCache")
+```
+
+## Overview 
+
+- Import MS-based proteomics data
+- Data processing using `QFeatures`
+- Differential abundance analysis using `msqrob2`
+- Launch an `altSEE` app to explore the DA proteins and their corresponding 
+  peptide intensities, interactively.
+  
+# Differential abundance
+
+To demonstrate the use of these panels we will perform a differential abundance
+analysis on  the Shen data containing 5 spike-in conditions (a, b, c, d and e) 
+PRIDE identifierPXD003881 (Shen et al. 2018).
+The data is used in the first chapter of our [msqrob2book](https://statomics.github.io/msqrob2book/01-basics.html).
+Here we will only use spike-in conditions (a-c) for illustration purposes. 
+
+```{r}
+bfc <- BiocFileCache()
+peptideFile <- bfcrpath(bfc,"https://github.com/statOmics/msqrob2data/raw/refs/heads/main/dda/shen/peptides.txt")
+```
+
+The quantitative columns in maxQuant start with "Intensity." (note the dot!).
+
+```{r}
+peptides <- data.table::fread(peptideFile, check.names = TRUE, integer64 = "double")
+(quantCols <- grep("Intensity[.]", names(peptides), value = TRUE))
+```
+
+We now can import these data using the readQFeatures function. The peptide level expression data will be imported into R as an instance of class QFeatures named cptac with an assay named peptides. We also use the fnames argument to set the row-names of the peptides assay to the peptide sequences.
+
+```{r}
+qf <- readQFeatures(peptides, 
+                    quantCols = quantCols, 
+                    name = "peptides", 
+                    fnames = "Sequence")
+```
+
+Below we update the sample (column) annotations to encode the two conditions, A and B, and the original sample numbers.
+
+```{r}
+qf$condition <- gsub("Intensity.(.).", "\\1", quantCols)
+qf$sampleId <- gsub("Intensity.(..)", "\\1",quantCols)
+colData(qf)
+```
+
+Here, we will only use first three conditions for illustration purposes.
+
+```{r}
+qf <- qf[,qf$condition %in% c("a", "b", "c"),]
+colData(qf)
+```
+
+## Data processing
+
+We will now perform the data processing and as in `msqrob2` vignette in the 
+msqrob2book. 
+
+1. Replace missing values by `NA`.
+2. Perform log2-transformation
+3. Peptide filtering
+4. Normalisation
+5. Summarization to protein level
+
+```{r warning=FALSE}
+qf <- zeroIsNA(qf, "peptides") # 1. convert 0 to NA
+
+qf <- logTransform(qf, base = 2, i = "peptides", name = "peptides_log") # 2.
+
+qf <- filterFeatures(
+qf, ~ Proteins != "" & ## 3. Remove failed protein inference
+  !grepl(";", Proteins)) ##  3. Remove protein groups
+qf <- filterFeatures(qf, ~ Reverse != "+" & ## 3. Remove decoys
+                          Potential.contaminant != "+") ## 3. Remove contaminants
+qf <- filterNA(qf, i = "peptides_log", pNA = .67) ## 3. Remove peptides that were picked up in less than 4 samples: pNA = 1-4/12. 
+
+qf <- sweep( #Subtract log2 norm factor column-by-column (MARGIN = 2) 
+  qf,
+  MARGIN = 2,
+  STATS = nfLogMedian(qf,"peptides_log"),
+  i = "peptides_log",
+  name = "peptides_norm"
+) ## 4. Normalisation
+
+qf <- aggregateFeatures(qf,
+    i = "peptides_norm", 
+    fcol = "Proteins", 
+    na.rm = TRUE,
+    name = "proteins"
+) ## 5. summarisation to protein level
+```
+
+## DA at the protein level 
+
+We model the data using msqrob2 and infer differential expression for all 
+pairwise comparisons. 
+
+```{r warning=FALSE}
+model <- ~ condition
+qf <- msqrob(
+    qf,  
+    i = "proteins",
+    formula = model,
+    robust = TRUE)
+
+(allHypotheses <- createPairwiseContrasts(
+  model, 
+  colData(qf), 
+  "condition"
+))
+
+(L <- makeContrast(
+  allHypotheses,
+  parameterNames = 
+    model.matrix(model, colData(qf)) |>
+    colnames())
+)
+
+#Rename columns L
+colnames(L) <- c("b-a","c-a","c-b")
+
+qf <- hypothesisTest(
+  qf,
+  i = "proteins",
+  contrast = L)
+```
+
+Note, that we assessed three different null hypothesis for each protein: 
+
+1. There is no differential abundances between condition b and a
+2. There is no differential abundances between condition c and a
+3. There is no differential abundances between condition c and b
+
+
+## DA at the peptide level 
+
+For illustration purposes, i.e. the VolcanoPlot panel for AltExps, 
+we also perform the modelling and inference at the peptide level. 
+
+We typically would skip this step in a real analysis, unless we also would like 
+to infer DA for post translational modifications. 
+
+We will use the same model and contrasts so we do not need to define these again. 
+
+```{r warning=FALSE}
+qf <- msqrob(
+    qf,  
+    i = "peptides_norm",
+    formula = model,
+    robust = TRUE)
+
+qf <- hypothesisTest(
+  qf,
+  i = "peptides_norm",
+  contrast = L)
+```
+
+## Conversion of QFeatures in to SingleCellExperiment
+
+We now convert the `QFeatures` object to a `SingleCellExperiment` object to 
+visualize the data with iSEE and explore both the protein level data as well as
+their corresponding peptide intensities that were picked up using the custom 
+altSEE panels.
+
+1. We get the protein set with colData, convert it to a 
+   SingleCellExperiment object and add a reduced dimensionality plot. 
+2. We extract the names of the rowData
+3. We replace the rowData by a data frame so that all variables of the  
+   inference tables become available as separate columns in the rowData. 
+   If we have multiple contrasts the variables will start with the contrast name.
+4. Add the names of the assays in the main summarised experiment. 
+   
+```{r}
+sce <- getWithColData(qf, i ="proteins") |> 
+   as("SingleCellExperiment") |> 
+   runMDS(exprs_values = 1) # 1. 
+rn <- rowData(sce) |> names() # 2. 
+rowData(sce) <- rowData(sce)[,rn!="msqrobModels"] |> as.data.frame() # 3.
+assayNames(sce) <- c("proteins","aggcounts") # 4.
+```
+
+Add altExps with peptide data. 
+
+1. We get the peptide_norm set, convert it to a 
+   SingleCellExperiment object and add a reduced dimensionality plot. 
+2. We extract the names of the rowData
+3. We replace the rowData by a data frame so that all variables of the  
+   inference tables become available as separate columns in the rowData. 
+   If we have multiple contrasts the variables will start with the contrast name.
+4. Add the names of the assays in the main summarised experiment. 
+
+```{r}
+altExp(sce,"peptides") <- qf[["peptides_norm"]] |> 
+     as("SingleCellExperiment") |> 
+   runMDS(exprs_values = 1) # 1. 
+rn <- rowData(altExp(sce,"peptides")) |> names() # 2. 
+rowData(altExp(sce,"peptides")) <- 
+  rowData(altExp(sce,"peptides"))[,rn!="msqrobModels"] |> 
+  as.data.frame() # 3.
+assayNames(altExp(sce,"peptides")) <-"peptides_norm"
+```
+
+We add the unnormalised log transformed peptide intensities as an additional 
+assay to the peptide altExp.
+
+```{r}
+assay(altExp(sce,"peptides"),"peptides_log") <- assay(qf,"peptides_log")
+```
+
+## launch iSEE
+
+```{r}
+rdp <- ReducedDimensionPlot(PanelWidth = 6L)
+ardp <- AltExpReducedDimensionPlot(PanelWidth = 6L)
+vp <- VolcanoPlot(PanelWidth = 6L)
+avp <- AltExpVolcanoPlot(PanelWidth = 6L)
+rdt <- RowDataTable(RowSelectionSource = "VolcanoPlot1", PanelWidth = 6L)
+ardt <- AltExpRowDataTable(RowSelectionSource = "AltExpVolcanoPlot1", 
+                           PanelWidth = 6L)
+mlfap <- LinkedFeaturesAssayPlot(
+  SelectionAltExp = "(Main experiment)",
+  LookupColumn = "(rowname)",
+  AltExp = "(Main experiment)",
+  AltAssay = "proteins",
+  MapColumn = "(rowname)",
+  YAxisFeatureSource = "RowDataTable1",
+  PlotType = "Scatter + lines",
+  XAxis = "Column data",
+  XAxisColumnData = "sampleId",
+  PanelWidth = 6L
+  )
+
+alfap <- LinkedFeaturesAssayPlot(
+  YAxisFeatureSource = "RowDataTable1",
+  SelectionAltExp = "(Main experiment)",
+  LookupColumn = "Proteins",
+  AltExp = "peptides",
+  AltAssay = "peptides_norm",
+  PlotType = "Scatter + lines",
+  XAxis = "Column data",
+  XAxisColumnData = "sampleId",
+  MapColumn = "Proteins",
+  PanelWidth = 6L
+  )
+
+initial_panels <- list(rdp, ardp, vp, avp, rdt, ardt, mlfap, alfap)
+```
+
+
+Launch the app 
+
+```{r launch-app, eval=FALSE}
+app <- iSEE(
+    sce,
+    initial = initial_panels
+)
+
+if (interactive()) {
+    shiny::runApp(app, launch.browser = TRUE)
+}
+```
+
+
+```{r, echo=FALSE}
+SCREENSHOT("screenshots/altExpApp.png")
+```
+
+Note that you can
+
+1. Select the proteins in the row data table using a part of their name or by 
+   selecting features in the volcanoplot
+2. Look at the results of another protein by either selecting another protein in 
+   the row data table or in the dropdown menus of both linked feature plots
+3. adjust the volcano plot for other contrasts e.g. c-a and c-b by selecting the 
+   corresponding p-value and log2 fold changes in the volcano plot panel. 
+4. also use the AltExp row data table to select features and the peptide altExp as 
+   the selection source in both panels. You can then select DA peptidoforms in 
+   the Alt Exp volcano plot, and visualise the peptidoform and its corresponding 
+   protein in their corresponding linked feature assay plots by selecting a 
+   peptidofrom from the AltExp row data table.
+
+Note that you can also use the AltExpFeatureAssayPlot panels if you want to 
+visualise features from the AltExp without the use of links, i.e. as the 
+altExp counterpart of FeatureAssayPlots for the main experiment. 
