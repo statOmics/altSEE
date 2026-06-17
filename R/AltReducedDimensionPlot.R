@@ -1,5 +1,5 @@
 ############################################################
-# AltExpReducedDimensionPlot
+# AltReducedDimensionPlot
 ############################################################
 
 # Extends ColumnDotPlot (not ReducedDimensionPlot) to avoid observer conflicts:
@@ -7,7 +7,7 @@
 # fail for altExp-only reducedDim names. We reimplement the reducedDim logic
 # from scratch, substituting altExp(se, ae) for se throughout.
 
-#' AltExpReducedDimensionPlot: reduced dimension plot for alternative experiments
+#' AltReducedDimensionPlot: reduced dimension plot for alternative experiments
 #'
 #' An S4 class extending \code{\linkS4class{ColumnDotPlot}} to display
 #' dimensionality reduction results stored in the
@@ -16,8 +16,9 @@
 #' (\code{\link[SingleCellExperiment]{altExp}}) inside a
 #' \code{\linkS4class{SingleCellExperiment}}.
 #'
-#' @slot AltExp \code{character(1)}.  Name of the alternative experiment
-#'   (must be present in \code{altExpNames(se)}).
+#' @slot Experiment \code{character(1)}.  Name of the alternative experiment
+#'   (must be present in \code{altExpNames(se)}), or the sentinel
+#'   \code{"(Main)"} to use the main experiment's reducedDims.
 #' @slot Type \code{character(1)}.  Name of the dimensionality reduction result
 #'   within the selected \code{AltExp} (must be present in
 #'   \code{reducedDimNames(altExp(se, AltExp))}).  Defaults to \code{NA},
@@ -31,25 +32,25 @@
 #' behaviour.
 #'
 #' @seealso
-#' \code{\link{AltExpReducedDimensionPlot}} for the constructor.
+#' \code{\link{AltReducedDimensionPlot}} for the constructor.
 #' \code{\linkS4class{ColumnDotPlot}} for the parent class.
 #' \code{\linkS4class{ReducedDimensionPlot}} for the analogous main-experiment panel.
 #'
-#' @name AltExpReducedDimensionPlot-class
-#' @rdname AltExpReducedDimensionPlot-class
-#' @exportClass AltExpReducedDimensionPlot
+#' @name AltReducedDimensionPlot-class
+#' @rdname AltReducedDimensionPlot-class
+#' @exportClass AltReducedDimensionPlot
 NULL
 
-setClass("AltExpReducedDimensionPlot",
+setClass("AltReducedDimensionPlot",
   contains = "ColumnDotPlot",
   slots = c(
-    AltExp = "character",
+    Experiment = "character",
     Type   = "character",
     XAxis  = "integer",
     YAxis  = "integer"
   ))
 
-setValidity2("AltExpReducedDimensionPlot", function(object) {
+setValidity2("AltReducedDimensionPlot", function(object) {
   # Type is intentionally allowed to be NA at construction time: like AltExp,
   # it is resolved at runtime by .refineParameters (first available
   # reducedDim result), so it must not be enforced as a non-NA string here.
@@ -64,50 +65,51 @@ setValidity2("AltExpReducedDimensionPlot", function(object) {
 })
 
 #' @importFrom iSEE .emptyDefault
-setMethod("initialize", "AltExpReducedDimensionPlot", function(.Object, ...) {
+setMethod("initialize", "AltReducedDimensionPlot", function(.Object, ...) {
   args <- list(...)
-  args <- .emptyDefault(args, "AltExp", NA_character_)
+  args <- .emptyDefault(args, "Experiment", NA_character_)
   args <- .emptyDefault(args, "Type",   NA_character_)
   args <- .emptyDefault(args, "XAxis",  1L)
   args <- .emptyDefault(args, "YAxis",  2L)
   do.call(callNextMethod, c(list(.Object), args))
 })
 
-#' Construct an AltExpReducedDimensionPlot panel
+#' Construct an AltReducedDimensionPlot panel
 #'
-#' Creates an instance of \code{\linkS4class{AltExpReducedDimensionPlot}} for
+#' Creates an instance of \code{\linkS4class{AltReducedDimensionPlot}} for
 #' use as a panel in an iSEE application.
 #'
 #' @param ... Named arguments corresponding to slots of
-#'   \code{\linkS4class{AltExpReducedDimensionPlot}} or its parent classes.
+#'   \code{\linkS4class{AltReducedDimensionPlot}} or its parent classes.
 #'
-#' @return An \code{\linkS4class{AltExpReducedDimensionPlot}} object.
+#' @return An \code{\linkS4class{AltReducedDimensionPlot}} object.
 #'
-#' @seealso \code{\linkS4class{AltExpReducedDimensionPlot}} for slot details.
+#' @seealso \code{\linkS4class{AltReducedDimensionPlot}} for slot details.
 #' @export
-AltExpReducedDimensionPlot <- function(...) new("AltExpReducedDimensionPlot", ...)
+AltReducedDimensionPlot <- function(...) new("AltReducedDimensionPlot", ...)
 
-setMethod(".fullName",   "AltExpReducedDimensionPlot", function(x) "AltExp reduced dimension plot")
-setMethod(".panelColor", "AltExpReducedDimensionPlot", function(x) "#006666")
+setMethod(".fullName",   "AltReducedDimensionPlot", function(x) "Alt reduced dimension plot")
+setMethod(".panelColor", "AltReducedDimensionPlot", function(x) "#006666")
 
 #' @importFrom iSEE .getCachedCommonInfo .setCachedCommonInfo
 #' @importFrom SingleCellExperiment altExpNames
-setMethod(".cacheCommonInfo", "AltExpReducedDimensionPlot", function(x, se) {
-  if (!is.null(.getCachedCommonInfo(se, "AltExpReducedDimensionPlot"))) return(se)
+setMethod(".cacheCommonInfo", "AltReducedDimensionPlot", function(x, se) {
+  if (!is.null(.getCachedCommonInfo(se, "AltReducedDimensionPlot"))) return(se)
   se <- callNextMethod()
-  .setCachedCommonInfo(se, "AltExpReducedDimensionPlot",
-    valid.altExp.names = altExpNames(se))
+  .setCachedCommonInfo(se, "AltReducedDimensionPlot",
+    valid.altExp.names = c(altExpNames(se), .selectionMainExpTitle))
 })
 
 #' @importFrom iSEE .replaceMissingWithFirst
 #' @importFrom SingleCellExperiment altExp altExpNames reducedDim reducedDimNames
 #' @importFrom methods is
-setMethod(".refineParameters", "AltExpReducedDimensionPlot", function(x, se) {
+setMethod(".refineParameters", "AltReducedDimensionPlot", function(x, se) {
   x <- callNextMethod()
   if (is.null(x)) return(NULL)
 
-  x <- .replaceMissingWithFirst(x, "AltExp", altExpNames(se))
-  ae <- altExp(se, slot(x, "AltExp"))
+  x <- .replaceMissingWithFirst(x, "Experiment", c(altExpNames(se), .selectionMainExpTitle))
+  ae_name <- slot(x, "Experiment")
+  ae <- if (identical(ae_name, .selectionMainExpTitle)) se else altExp(se, ae_name)
 
   if (!is(ae, "SingleCellExperiment")) {
     slot(x, "Type") <- NA_character_
@@ -141,13 +143,13 @@ setMethod(".refineParameters", "AltExpReducedDimensionPlot", function(x, se) {
 #'   .addSpecificTour
 #' @importFrom SingleCellExperiment altExp altExpNames reducedDim reducedDimNames
 #' @importFrom shiny selectInput
-setMethod(".defineDataInterface", "AltExpReducedDimensionPlot", function(x, se, select_info) {
+setMethod(".defineDataInterface", "AltReducedDimensionPlot", function(x, se, select_info) {
   panel_name <- .getEncodedName(x)
   .input_FUN <- function(field) paste0(panel_name, "_", field)
 
-  all_altexps <- altExpNames(se)
-  current_ae  <- slot(x, "AltExp")
-  ae          <- altExp(se, current_ae)
+  all_altexps <- c(altExpNames(se), .selectionMainExpTitle)
+  current_ae  <- slot(x, "Experiment")
+  ae <- if (identical(current_ae, .selectionMainExpTitle)) se else altExp(se, current_ae)
 
   if (is(ae, "SingleCellExperiment")) {
     available <- reducedDimNames(ae)
@@ -163,9 +165,9 @@ setMethod(".defineDataInterface", "AltExpReducedDimensionPlot", function(x, se, 
     ncol(reducedDim(ae, cur_type))
   } else 2L
 
-  .addSpecificTour(class(x)[1], "AltExp", function(plot_name) {
+  .addSpecificTour(class(x)[1], "Experiment", function(plot_name) {
     data.frame(rbind(
-      c(element = paste0("#", plot_name, "_AltExp + .selectize-control"),
+      c(element = paste0("#", plot_name, "_Experiment + .selectize-control"),
         intro = "Select which alternative experiment to visualise.
 Only alternative experiments that contain at least one non-empty
 <code>reducedDim</code> result are useful here."),
@@ -181,8 +183,8 @@ selected alternative experiment — for example <code>PCA</code> or
   })
 
   list(
-    selectInput(.input_FUN("AltExp"),
-      label    = "AltExp:",
+    selectInput(.input_FUN("Experiment"),
+      label    = "Experiment:",
       choices  = all_altexps,
       selected = iSEE:::.choose_link(current_ae, all_altexps)
     ),
@@ -207,12 +209,12 @@ selected alternative experiment — for example <code>PCA</code> or
 #' @importFrom iSEE .getEncodedName .createProtectedParameterObservers
 #' @importFrom SingleCellExperiment altExp reducedDim reducedDimNames
 #' @importFrom shiny observeEvent updateSelectInput
-setMethod(".createObservers", "AltExpReducedDimensionPlot",
+setMethod(".createObservers", "AltReducedDimensionPlot",
     function(x, se, input, session, pObjects, rObjects) {
   callNextMethod()
 
   plot_name  <- .getEncodedName(x)
-  ae_field   <- paste0(plot_name, "_AltExp")
+  ae_field   <- paste0(plot_name, "_Experiment")
   type_field <- paste0(plot_name, "_Type")
   x_field    <- paste0(plot_name, "_XAxis")
   y_field    <- paste0(plot_name, "_YAxis")
@@ -231,7 +233,8 @@ setMethod(".createObservers", "AltExpReducedDimensionPlot",
     if (identical(matched, pObjects$memory[[plot_name]][["Type"]])) return(NULL)
     pObjects$memory[[plot_name]][["Type"]] <- matched
 
-    ae      <- altExp(se, pObjects$memory[[plot_name]][["AltExp"]])
+    cur_ae <- pObjects$memory[[plot_name]][["Experiment"]]
+    ae <- if (identical(cur_ae, .selectionMainExpTitle)) se else altExp(se, cur_ae)
     new_max <- ncol(reducedDim(ae, matched))
     cap_X   <- pmin(new_max, pObjects$memory[[plot_name]][["XAxis"]])
     cap_Y   <- pmin(new_max, pObjects$memory[[plot_name]][["YAxis"]])
@@ -243,13 +246,13 @@ setMethod(".createObservers", "AltExpReducedDimensionPlot",
     iSEE:::.requestCleanUpdate(plot_name, pObjects, rObjects)
   }, ignoreInit = TRUE)
 
-  # AltExp: update Type choices and reset axes when the altExp changes
+  # AltExp: update Type choices and reset axes when the experiment changes
   observeEvent(input[[ae_field]], {
     matched_ae <- input[[ae_field]]
-    if (identical(matched_ae, pObjects$memory[[plot_name]][["AltExp"]])) return(NULL)
-    pObjects$memory[[plot_name]][["AltExp"]] <- matched_ae
+    if (identical(matched_ae, pObjects$memory[[plot_name]][["Experiment"]])) return(NULL)
+    pObjects$memory[[plot_name]][["Experiment"]] <- matched_ae
 
-    ae <- altExp(se, matched_ae)
+    ae <- if (identical(matched_ae, .selectionMainExpTitle)) se else altExp(se, matched_ae)
     if (!is(ae, "SingleCellExperiment")) {
       pObjects$memory[[plot_name]][["Type"]] <- NA_character_
       iSEE:::.requestCleanUpdate(plot_name, pObjects, rObjects)
@@ -284,8 +287,8 @@ setMethod(".createObservers", "AltExpReducedDimensionPlot",
 
 #' @importFrom iSEE .textEval
 #' @importFrom SingleCellExperiment altExp reducedDim
-setMethod(".generateDotPlotData", "AltExpReducedDimensionPlot", function(x, envir) {
-  ae_name <- slot(x, "AltExp")
+setMethod(".generateDotPlotData", "AltReducedDimensionPlot", function(x, envir) {
+  ae_name <- slot(x, "Experiment")
   type    <- slot(x, "Type")
   xaxis   <- slot(x, "XAxis")
   yaxis   <- slot(x, "YAxis")
@@ -311,7 +314,8 @@ setMethod(".generateDotPlotData", "AltExpReducedDimensionPlot", function(x, envi
   }
 
   data_cmds <- c(
-    sprintf("ae <- altExp(se, %s);",        deparse(ae_name)),
+    if (identical(ae_name, .selectionMainExpTitle)) "ae <- se;" else
+      sprintf("ae <- altExp(se, %s);", deparse(ae_name)),
     sprintf("red.dim <- reducedDim(ae, %s);", deparse(type)),
     sprintf(
       "plot.data <- data.frame(X = red.dim[, %i], Y = red.dim[, %i], row.names = colnames(se));",
@@ -331,7 +335,7 @@ setMethod(".generateDotPlotData", "AltExpReducedDimensionPlot", function(x, envi
 })
 
 #' @importFrom iSEE .generateDotPlot .textEval
-setMethod(".generateDotPlot", "AltExpReducedDimensionPlot", function(x, labels, envir) {
+setMethod(".generateDotPlot", "AltReducedDimensionPlot", function(x, labels, envir) {
   if (is.na(slot(x, "Type"))) {
     # Use plot.data with aes(x = X, y = Y) so that coordinfo$mapping$x is "X".
     # Without this mapping, Shiny's nearPoints() cannot infer xvar and throws an
@@ -356,12 +360,12 @@ setMethod(".generateDotPlot", "AltExpReducedDimensionPlot", function(x, labels, 
 })
 
 #' @importFrom iSEE .getEncodedName .getPanelColor .addTourStep .dataParamBoxOpen
-setMethod(".definePanelTour", "AltExpReducedDimensionPlot", function(x) {
+setMethod(".definePanelTour", "AltReducedDimensionPlot", function(x) {
   collated <- rbind(
     c(
       element = paste0("#", .getEncodedName(x)),
       intro   = sprintf(
-        "The <font color=\"%s\">AltExp reduced dimension plot</font> panel
+        "The <font color=\"%s\">Alt reduced dimension plot</font> panel
 displays dimensionality reduction results (PCA, UMAP, etc.) stored in a
 <code>reducedDim</code> of an <em>alternative experiment</em> inside a
 <code>SingleCellExperiment</code>.  Each point is a cell; coordinates come

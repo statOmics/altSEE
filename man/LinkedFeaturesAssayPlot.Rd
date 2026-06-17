@@ -25,9 +25,9 @@ LinkedFeaturesAssayPlot()
 
 # Select a protein from the main experiment and visualise its peptides
 LinkedFeaturesAssayPlot(
-  SelectionAltExp    = "(Main experiment)",
+  SelectionExperiment    = "(Main)",
   LookupColumn       = "Proteins",
-  AltExp             = "peptides",
+  Experiment            = "peptides",
   AltAssay           = "peptides_norm",
   MapColumn          = "Proteins"
 )
@@ -35,9 +35,9 @@ LinkedFeaturesAssayPlot(
 # Select a peptide from an altExp and visualise its protein in the main
 # experiment
 LinkedFeaturesAssayPlot(
-  SelectionAltExp    = "peptides",
+  SelectionExperiment    = "peptides",
   LookupColumn       = "Proteins",
-  AltExp             = "(Main experiment)",
+  Experiment            = "(Main)",
   AltAssay           = "proteins",
   MapColumn          = "Proteins"
 )
@@ -53,9 +53,9 @@ rdp <- ReducedDimensionPlot()
 vp <- VolcanoPlot()
 rdt <- RowDataTable(RowSelectionSource = "VolcanoPlot1")
 mlfap <- LinkedFeaturesAssayPlot(
-SelectionAltExp = "(Main experiment)",
+SelectionExperiment = "(Main)",
 LookupColumn = "(rowname)",
-AltExp = "(Main experiment)",
+Experiment= "(Main)",
 AltAssay = "proteins",
 MapColumn = "(rowname)",
 YAxisFeatureSource = "RowDataTable1",
@@ -67,9 +67,9 @@ XAxisColumnData = "sampleId"
 # Define LinkedFeatureAssayPlot for peptides altExp assay  
 alfap <- LinkedFeaturesAssayPlot(
 YAxisFeatureSource = "RowDataTable1",
-SelectionAltExp = "(Main experiment)",
+SelectionExperiment = "(Main)",
 LookupColumn = "Proteins",
-AltExp = "peptides",
+Experiment= "peptides",
 AltAssay = "peptides_norm",
 PlotType = "Scatter + lines",
 XAxis = "Column data",

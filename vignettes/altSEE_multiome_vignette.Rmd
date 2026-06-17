@@ -344,7 +344,7 @@ head(rowData(altExp(sce_rna, "ATAC"))$nearestGene)
 We configure a six-panel layout that illustrates the altSEE workflow:
 
 1. **ReducedDimensionPlot** — UMAP of cells coloured by cell type from the main assay (RNA).
-2. **AltExpReducedDimensionPlot** — UMAP of cells coloured by cell type from the AltExp (ATAC).
+2. **AltReducedDimensionPlot** — UMAP of cells coloured by cell type from the AltExp (ATAC).
 3. **RowDataTable** (RNA) — searchable gene table; clicking a row can drive
    the RNA panel and the ATAC panel plots (current default).
 4. **ATAC-RowDataTable** (ATAC) — searchable gene table; clicking a row can drive the RNA panel and the ATAC panel plots.
@@ -364,7 +364,7 @@ rdp <- ReducedDimensionPlot(
     PanelWidth      = 6L
 )
 # Panel 2: AltExp UMAP coloured by cell type
-ardp <- AltExpReducedDimensionPlot(
+ardp <- AltReducedDimensionPlot(
     Type            = "UMAP",
     ColorBy         = "Column data",
     ColorByColumnData = "celltype",
@@ -380,7 +380,7 @@ rdt <- RowDataTable(
 )
 
 # Panel 4: Searchable AltExp table
-ardt <- AltExpRowDataTable(
+ardt <- AltRowDataTable(
     PanelWidth = 6L
 )
 
@@ -389,14 +389,15 @@ ardt <- AltExpRowDataTable(
 # Visualisation Experiment (altExp or main experiment) with a MapColumn. All
 # features in the Visualisation experiment that map via the MapColum to the 
 # selected feature in the Selection experiment via the lookupColumn are 
-# visualised. Here we initialise the SelectionAltExp and the AltExp for 
-# visualisation both with the (Main experiment). The plot then simply 
-# visualizes features of the Main experiment. In the app the user can then 
-# change the SelectionAltExp if they want to visualise the main exp through # a linked AltExp, e.g. ATAC AltExp.
+# visualised. Here we initialise the SelectionExperiment and the Experiment for
+# visualisation both with the (Main). The plot then simply
+# visualizes features of the Main experiment. In the app the user can then
+# change the SelectionExperiment if they want to visualise the main exp through
+# a linked altExp, e.g. ATAC altExp.
 mlfap <- LinkedFeaturesAssayPlot(
-    SelectionAltExp    = "(Main experiment)",
-    LookupColumn       = "(rowname)",
-    AltExp             = "(Main experiment)",
+    SelectionExperiment = "(Main)",
+    LookupColumn        = "(rowname)",
+    Experiment          = "(Main)",
     AltAssay           = "logcounts",
     MapColumn          = "(rowname)",
     XAxis              = "Column data",
@@ -411,10 +412,10 @@ mlfap <- LinkedFeaturesAssayPlot(
 # Panel 6: altSEE ATAC panel — peaks linked to selected gene in main 
 # experiment
 alfap <- LinkedFeaturesAssayPlot(
-    SelectionAltExp    = "(Main experiment)",
-    LookupColumn       = "(rowname)",
-    YAxisFeatureSource = "RowDataTable1", # driven by gene selection in table
-    AltExp             = "ATAC",
+    SelectionExperiment = "(Main)",
+    LookupColumn        = "(rowname)",
+    YAxisFeatureSource  = "RowDataTable1", # driven by gene selection in table
+    Experiment          = "ATAC",
     AltAssay           = "tfidf",
     XAxis              = "Column data",
     XAxisColumnData    = "celltype",

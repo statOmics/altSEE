@@ -216,63 +216,54 @@ altSEE panels.
 
 1. We get the protein set with colData, convert it to a 
    SingleCellExperiment object and add a reduced dimensionality plot. 
-2. We extract the names of the rowData
-3. We replace the rowData by a data frame so that all variables of the  
-   inference tables become available as separate columns in the rowData. 
-   If we have multiple contrasts the variables will start with the contrast name.
-4. Add the names of the assays in the main summarised experiment. 
-   
+2. Unpack inference columns 
+
 ```{r}
 sce <- getWithColData(qf, i ="proteins") |> 
    as("SingleCellExperiment") |> 
    runMDS(exprs_values = 1) # 1. 
-rn <- rowData(sce) |> names() # 2. 
-rowData(sce) <- rowData(sce)[,rn!="msqrobModels"] |> as.data.frame() # 3.
-assayNames(sce) <- c("proteins","aggcounts") # 4.
+rowData(sce) <- rowData(sce) |> 
+  as.data.frame() |> 
+  dplyr::select(is.atomic) #2. 
 ```
 
 Add altExps with peptide data. 
 
-1. We get the peptide_norm set, convert it to a 
+1. We get the peptide sets, convert them to a 
    SingleCellExperiment object and add a reduced dimensionality plot. 
-2. We extract the names of the rowData
-3. We replace the rowData by a data frame so that all variables of the  
-   inference tables become available as separate columns in the rowData. 
-   If we have multiple contrasts the variables will start with the contrast name.
-4. Add the names of the assays in the main summarised experiment. 
+2. Unpack inference columns 
 
 ```{r}
-altExp(sce,"peptides") <- qf[["peptides_norm"]] |> 
+setNames <- names(qf)
+setNames <- setNames[setNames != "proteins"]
+for (i in setNames)
+{
+altExp(sce,i) <- qf[[i]] |> 
      as("SingleCellExperiment") |> 
    runMDS(exprs_values = 1) # 1. 
-rn <- rowData(altExp(sce,"peptides")) |> names() # 2. 
-rowData(altExp(sce,"peptides")) <- 
-  rowData(altExp(sce,"peptides"))[,rn!="msqrobModels"] |> 
-  as.data.frame() # 3.
-assayNames(altExp(sce,"peptides")) <-"peptides_norm"
-```
-
-We add the unnormalised log transformed peptide intensities as an additional 
-assay to the peptide altExp.
-
-```{r}
-assay(altExp(sce,"peptides"),"peptides_log") <- assay(qf,"peptides_log")
+rowData(altExp(sce,i)) <- rowData(altExp(sce,i)) |> 
+  as.data.frame() |> 
+  dplyr::select(is.atomic) #2.
+}
 ```
 
 ## launch iSEE
 
 ```{r}
 rdp <- ReducedDimensionPlot(PanelWidth = 6L)
-ardp <- AltExpReducedDimensionPlot(PanelWidth = 6L)
+ardp <- AltReducedDimensionPlot(PanelWidth = 6L,
+                                Experiment = "peptides_norm")
 vp <- VolcanoPlot(PanelWidth = 6L)
-avp <- AltExpVolcanoPlot(PanelWidth = 6L)
+avp <- AltVolcanoPlot(PanelWidth = 6L,
+                      Experiment = "peptides_norm")
 rdt <- RowDataTable(RowSelectionSource = "VolcanoPlot1", PanelWidth = 6L)
-ardt <- AltExpRowDataTable(RowSelectionSource = "AltExpVolcanoPlot1", 
+ardt <- AltRowDataTable(RowSelectionSource = "AltVolcanoPlot1", 
+                        Experiment = "peptides_norm",
                            PanelWidth = 6L)
 mlfap <- LinkedFeaturesAssayPlot(
-  SelectionAltExp = "(Main experiment)",
+  SelectionExperiment = "(Main)",
   LookupColumn = "(rowname)",
-  AltExp = "(Main experiment)",
+  Experiment = "(Main)",
   AltAssay = "proteins",
   MapColumn = "(rowname)",
   YAxisFeatureSource = "RowDataTable1",
@@ -284,10 +275,9 @@ mlfap <- LinkedFeaturesAssayPlot(
 
 alfap <- LinkedFeaturesAssayPlot(
   YAxisFeatureSource = "RowDataTable1",
-  SelectionAltExp = "(Main experiment)",
+  SelectionExperiment = "(Main)",
   LookupColumn = "Proteins",
-  AltExp = "peptides",
-  AltAssay = "peptides_norm",
+  Experiment = "peptides_norm",
   PlotType = "Scatter + lines",
   XAxis = "Column data",
   XAxisColumnData = "sampleId",
@@ -325,12 +315,11 @@ Note that you can
    the row data table or in the dropdown menus of both linked feature plots
 3. adjust the volcano plot for other contrasts e.g. c-a and c-b by selecting the 
    corresponding p-value and log2 fold changes in the volcano plot panel. 
-4. also use the AltExp row data table to select features and the peptide altExp as 
+4. also use the Alt row data table to select features and the peptide altExp as 
    the selection source in both panels. You can then select DA peptidoforms in 
-   the Alt Exp volcano plot, and visualise the peptidoform and its corresponding 
+   the Alt volcano plot, and visualise the peptidoform and its corresponding 
    protein in their corresponding linked feature assay plots by selecting a 
    peptidofrom from the AltExp row data table.
 
-Note that you can also use the AltExpFeatureAssayPlot panels if you want to 
-visualise features from the AltExp without the use of links, i.e. as the 
-altExp counterpart of FeatureAssayPlots for the main experiment. 
+Note that you can also use the AltFeatureAssayPlot panels if you want to 
+visualise features from the AltExp (or the Main experiment) without the use of links, i.e. as the altExp counterpart of FeatureAssayPlots for the main experiment. 

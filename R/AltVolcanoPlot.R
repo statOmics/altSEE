@@ -1,14 +1,13 @@
 ############################################################
-# AltExpVolcanoPlot
+# AltVolcanoPlot
 ############################################################
 
 # Extends VolcanoPlot from iSEEu to display rowData fields from an alternative
-# experiment. The key override is in .generateDotPlotData, which substitutes
-# altExp(se, ae) for se in all rowData lookups — the parent's callNextMethod()
-# chain would use rowData(se) (main experiment), which is wrong here.
-# .cacheCommonInfo and .refineParameters are overridden for the same reason.
+# experiment or the main experiment (via the "(Main)" sentinel).
+# The key override is in .generateDotPlotData, which substitutes altExp(se, ae)
+# or se for all rowData lookups.
 
-#' AltExpVolcanoPlot: volcano plot for alternative experiments
+#' AltVolcanoPlot: volcano plot for alternative experiments
 #'
 #' An S4 class extending \code{\linkS4class{VolcanoPlot}} from
 #' \pkg{iSEEu} to display a volcano plot for features of an
@@ -22,10 +21,11 @@
 #' \code{PValueThreshold}, \code{LogFCThreshold}, and
 #' \code{PValueCorrection} slots.
 #'
-#' @slot AltExp \code{character(1)}.  Name of the alternative experiment whose
-#'   \code{rowData} supplies the p-value and log fold-change columns.
-#'   Defaults to \code{NA}, resolved at runtime to the first entry of
-#'   \code{altExpNames(se)}.
+#' @slot Experiment \code{character(1)}.  Name of the alternative experiment whose
+#'   \code{rowData} supplies the p-value and log fold-change columns, or the
+#'   sentinel \code{"(Main)"} to use the main experiment's
+#'   \code{rowData}.  Defaults to \code{NA}, resolved at runtime to
+#'   the first available alternative experiment.
 #'
 #' @section Inherited slots:
 #' All slots from \code{\linkS4class{VolcanoPlot}} are inherited, including
@@ -34,74 +34,75 @@
 #' \code{PValueCorrection}.
 #'
 #' @seealso
-#' \code{\link{AltExpVolcanoPlot}} for the constructor.
+#' \code{\link{AltVolcanoPlot}} for the constructor.
 #' \code{\linkS4class{VolcanoPlot}} for the parent class in \pkg{iSEEu}.
-#' \code{\linkS4class{AltExpRowDataTable}} for a compatible row-selection source.
+#' \code{\linkS4class{AltRowDataTable}} for a compatible row-selection source.
 #'
-#' @name AltExpVolcanoPlot-class
-#' @rdname AltExpVolcanoPlot-class
-#' @exportClass AltExpVolcanoPlot
+#' @name AltVolcanoPlot-class
+#' @rdname AltVolcanoPlot-class
+#' @exportClass AltVolcanoPlot
 NULL
 
 #' @importClassesFrom iSEEu VolcanoPlot
-setClass("AltExpVolcanoPlot",
+setClass("AltVolcanoPlot",
   contains = "VolcanoPlot",
-  slots = c(AltExp = "character"))
+  slots = c(Experiment = "character"))
 
 #' @importFrom iSEE .emptyDefault
-setMethod("initialize", "AltExpVolcanoPlot", function(.Object, ...) {
+setMethod("initialize", "AltVolcanoPlot", function(.Object, ...) {
   args <- list(...)
-  args <- .emptyDefault(args, "AltExp", NA_character_)
+  args <- .emptyDefault(args, "Experiment", NA_character_)
   do.call(callNextMethod, c(list(.Object), args))
 })
 
-#' Construct an AltExpVolcanoPlot panel
+#' Construct an AltVolcanoPlot panel
 #'
-#' Creates an instance of \code{\linkS4class{AltExpVolcanoPlot}} for use as a
+#' Creates an instance of \code{\linkS4class{AltVolcanoPlot}} for use as a
 #' panel in an iSEE application.
 #'
 #' @param ... Named arguments corresponding to slots of
-#'   \code{\linkS4class{AltExpVolcanoPlot}} or its parent classes.
+#'   \code{\linkS4class{AltVolcanoPlot}} or its parent classes.
 #'
-#' @return An \code{\linkS4class{AltExpVolcanoPlot}} object.
+#' @return An \code{\linkS4class{AltVolcanoPlot}} object.
 #'
-#' @seealso \code{\linkS4class{AltExpVolcanoPlot}} for slot details.
+#' @seealso \code{\linkS4class{AltVolcanoPlot}} for slot details.
 #' @export
-AltExpVolcanoPlot <- function(...) new("AltExpVolcanoPlot", ...)
+AltVolcanoPlot <- function(...) new("AltVolcanoPlot", ...)
 
-setMethod(".fullName",   "AltExpVolcanoPlot", function(x) "AltExp volcano plot")
-setMethod(".panelColor", "AltExpVolcanoPlot", function(x) "#6B2D8B")
+setMethod(".fullName",   "AltVolcanoPlot", function(x) "Alt volcano plot")
+setMethod(".panelColor", "AltVolcanoPlot", function(x) "#6B2D8B")
 
 #' @importFrom iSEE .getCachedCommonInfo .setCachedCommonInfo .findAtomicFields
 #'   .whichNumeric
 #' @importFrom SingleCellExperiment altExp altExpNames
 #' @importFrom SummarizedExperiment rowData
-setMethod(".cacheCommonInfo", "AltExpVolcanoPlot", function(x, se) {
-  if (!is.null(.getCachedCommonInfo(se, "AltExpVolcanoPlot"))) return(se)
+setMethod(".cacheCommonInfo", "AltVolcanoPlot", function(x, se) {
+  if (!is.null(.getCachedCommonInfo(se, "AltVolcanoPlot"))) return(se)
   se <- callNextMethod()
 
-  valid_p_by_ae   <- vector("list", length(altExpNames(se)))
-  valid_lfc_by_ae <- vector("list", length(altExpNames(se)))
-  valid_rd_by_ae  <- vector("list", length(altExpNames(se)))
-  names(valid_p_by_ae) <- names(valid_lfc_by_ae) <- names(valid_rd_by_ae) <- altExpNames(se)
+  all_names <- c(altExpNames(se), .selectionMainExpTitle)
 
-  valid_numeric_by_ae <- vector("list", length(altExpNames(se)))
-  names(valid_numeric_by_ae) <- altExpNames(se)
+  valid_p_by_ae       <- vector("list", length(all_names))
+  valid_lfc_by_ae     <- vector("list", length(all_names))
+  valid_rd_by_ae      <- vector("list", length(all_names))
+  valid_numeric_by_ae <- vector("list", length(all_names))
+  names(valid_p_by_ae) <- names(valid_lfc_by_ae) <-
+    names(valid_rd_by_ae) <- names(valid_numeric_by_ae) <- all_names
 
-  for (ae_name in altExpNames(se)) {
-    ae          <- altExp(se, ae_name)
-    rd          <- rowData(ae)
+  for (ae_name in all_names) {
+    ae_obj      <- if (identical(ae_name, .selectionMainExpTitle)) se else altExp(se, ae_name)
+    rd          <- rowData(ae_obj)
     displayable <- .findAtomicFields(rd)
     continuous  <- displayable[.whichNumeric(rd[, displayable, drop = FALSE])]
 
-    valid_rd_by_ae[[ae_name]]     <- displayable
+    valid_rd_by_ae[[ae_name]]      <- displayable
     valid_numeric_by_ae[[ae_name]] <- continuous
-    valid_p_by_ae[[ae_name]]      <- iSEEu:::.matchPValueFields(se, continuous)
-    valid_lfc_by_ae[[ae_name]]    <- iSEEu:::.matchLogFCFields(se, continuous)
+    valid_p_by_ae[[ae_name]]       <- iSEEu:::.matchPValueFields(se, continuous)
+    valid_lfc_by_ae[[ae_name]]     <- iSEEu:::.matchLogFCFields(se, continuous)
   }
 
-  .setCachedCommonInfo(se, "AltExpVolcanoPlot",
-    valid.altExp.names           = altExpNames(se),
+  .setCachedCommonInfo(se, "AltVolcanoPlot",
+    valid.altExp.names           = all_names,
     valid.rowData.by.altExp      = valid_rd_by_ae,
     valid.numeric.by.altExp      = valid_numeric_by_ae,
     valid.p.fields.by.altExp     = valid_p_by_ae,
@@ -110,14 +111,14 @@ setMethod(".cacheCommonInfo", "AltExpVolcanoPlot", function(x, se) {
 
 #' @importFrom iSEE .replaceMissingWithFirst
 #' @importFrom SingleCellExperiment altExpNames
-setMethod(".refineParameters", "AltExpVolcanoPlot", function(x, se) {
+setMethod(".refineParameters", "AltVolcanoPlot", function(x, se) {
   x <- callNextMethod()
   if (is.null(x)) return(NULL)
 
-  x <- .replaceMissingWithFirst(x, "AltExp", altExpNames(se))
-  ae_name <- slot(x, "AltExp")
+  x <- .replaceMissingWithFirst(x, "Experiment", c(altExpNames(se), .selectionMainExpTitle))
+  ae_name <- slot(x, "Experiment")
 
-  cache <- .getCachedCommonInfo(se, "AltExpVolcanoPlot")
+  cache <- .getCachedCommonInfo(se, "AltVolcanoPlot")
 
   valid_p       <- cache$valid.p.fields.by.altExp[[ae_name]]
   valid_lfc     <- cache$valid.lfc.fields.by.altExp[[ae_name]]
@@ -143,12 +144,12 @@ setMethod(".refineParameters", "AltExpVolcanoPlot", function(x, se) {
 #'   .addSpecificTour
 #' @importFrom SingleCellExperiment altExpNames
 #' @importFrom shiny selectInput hr
-setMethod(".defineDataInterface", "AltExpVolcanoPlot", function(x, se, select_info) {
+setMethod(".defineDataInterface", "AltVolcanoPlot", function(x, se, select_info) {
   panel_name <- .getEncodedName(x)
 
-  all_altexps <- altExpNames(se)
-  ae_name       <- slot(x, "AltExp")
-  cache         <- .getCachedCommonInfo(se, "AltExpVolcanoPlot")
+  all_altexps <- c(altExpNames(se), .selectionMainExpTitle)
+  ae_name       <- slot(x, "Experiment")
+  cache         <- .getCachedCommonInfo(se, "AltVolcanoPlot")
   valid_p       <- cache$valid.p.fields.by.altExp[[ae_name]]
   valid_lfc     <- cache$valid.lfc.fields.by.altExp[[ae_name]]
   valid_rd      <- cache$valid.rowData.by.altExp[[ae_name]]
@@ -162,9 +163,9 @@ setMethod(".defineDataInterface", "AltExpVolcanoPlot", function(x, se, select_in
     lfc_choices <- valid_lfc
   }
 
-  .addSpecificTour(class(x)[1], "AltExp", function(plot_name) {
+  .addSpecificTour(class(x)[1], "Experiment", function(plot_name) {
     data.frame(rbind(
-      c(element = paste0("#", plot_name, "_AltExp + .selectize-control"),
+      c(element = paste0("#", plot_name, "_Experiment + .selectize-control"),
         intro = "Select the alternative experiment whose <code>rowData</code>
 supplies the p-values and log fold-changes for the volcano plot."),
       c(element = paste0("#", plot_name, "_YAxis + .selectize-control"),
@@ -180,8 +181,8 @@ alternative experiment that contains the log fold-changes.")
   c(
     list(
       selectInput(
-        paste0(panel_name, "_AltExp"),
-        label    = "AltExp:",
+        paste0(panel_name, "_Experiment"),
+        label    = "Experiment:",
         choices  = all_altexps,
         selected = iSEE:::.choose_link(ae_name, all_altexps)
       ),
@@ -205,26 +206,26 @@ alternative experiment that contains the log fold-changes.")
 #' @importFrom SingleCellExperiment altExpNames altExp
 #' @importFrom SummarizedExperiment rowData
 #' @importFrom shiny observeEvent updateSelectInput
-setMethod(".createObservers", "AltExpVolcanoPlot",
+setMethod(".createObservers", "AltVolcanoPlot",
     function(x, se, input, session, pObjects, rObjects) {
   callNextMethod()
 
   plot_name <- .getEncodedName(x)
-  ae_field  <- paste0(plot_name, "_AltExp")
+  ae_field  <- paste0(plot_name, "_Experiment")
   y_field   <- paste0(plot_name, "_", iSEE:::.rowDataYAxis)
   x_field   <- paste0(plot_name, "_", iSEE:::.rowDataXAxisRowData)
 
   # nocov start
   # Note: we deliberately do NOT call .createUnprotectedParameterObservers for
-  # "AltExp" here.  That helper would update pObjects$memory[["AltExp"]] before
+  # "Experiment" here.  That helper would update pObjects$memory[["Experiment"]] before
   # this observeEvent fires, causing the identical() guard to short-circuit and
   # leaving the p-value / logFC dropdowns stale.  We own the full update cycle.
   observeEvent(input[[ae_field]], {
     matched_ae <- input[[ae_field]]
-    if (identical(matched_ae, pObjects$memory[[plot_name]][["AltExp"]])) return(NULL)
-    pObjects$memory[[plot_name]][["AltExp"]] <- matched_ae
+    if (identical(matched_ae, pObjects$memory[[plot_name]][["Experiment"]])) return(NULL)
+    pObjects$memory[[plot_name]][["Experiment"]] <- matched_ae
 
-    cache         <- .getCachedCommonInfo(se, "AltExpVolcanoPlot")
+    cache         <- .getCachedCommonInfo(se, "AltVolcanoPlot")
     valid_p       <- cache$valid.p.fields.by.altExp[[matched_ae]]
     valid_lfc     <- cache$valid.lfc.fields.by.altExp[[matched_ae]]
     valid_rd      <- cache$valid.rowData.by.altExp[[matched_ae]]
@@ -261,12 +262,12 @@ setMethod(".createObservers", "AltExpVolcanoPlot",
 #' @importFrom iSEE .textEval
 #' @importFrom SingleCellExperiment altExp
 #' @importFrom SummarizedExperiment rowData
-setMethod(".generateDotPlotData", "AltExpVolcanoPlot", function(x, envir) {
-  ae_name <- slot(x, "AltExp")
+setMethod(".generateDotPlotData", "AltVolcanoPlot", function(x, envir) {
+  ae_name <- slot(x, "Experiment")
   y_lab   <- slot(x, iSEE:::.rowDataYAxis)
   x_lab   <- slot(x, iSEE:::.rowDataXAxisRowData)
 
-  err_msg <- "Select AltExp with p-values and log fold changes in the rowData"
+  err_msg <- "Select an experiment with p-values and log fold changes in the rowData"
 
   # Helper: populate envir with a safe NA-filled plot.data and return the error
   # result list.  nrow(se) rows keeps downstream colour/shape/size methods from
@@ -288,7 +289,8 @@ setMethod(".generateDotPlotData", "AltExpVolcanoPlot", function(x, envir) {
   if (is.na(y_lab)) return(make_error_result())
 
   data_cmds <- c(
-    sprintf("ae <- altExp(se, %s);", deparse(ae_name)),
+    if (identical(ae_name, .selectionMainExpTitle)) "ae <- se;" else
+      sprintf("ae <- altExp(se, %s);", deparse(ae_name)),
     sprintf("plot.data <- data.frame(Y = rowData(ae)[, %s], row.names = rownames(ae));",
             deparse(y_lab)),
     sprintf("plot.data$X <- rowData(ae)[, %s];", deparse(x_lab))
@@ -320,7 +322,7 @@ setMethod(".generateDotPlotData", "AltExpVolcanoPlot", function(x, envir) {
 })
 
 #' @importFrom iSEE .generateDotPlot .textEval
-setMethod(".generateDotPlot", "AltExpVolcanoPlot", function(x, labels, envir) {
+setMethod(".generateDotPlot", "AltVolcanoPlot", function(x, labels, envir) {
   # Two conditions both indicate the error state:
   #   1. The NA sentinel set by .refineParameters (normal path)
   #   2. Empty X label — set by make_error_result() in .generateDotPlotData
@@ -347,12 +349,12 @@ setMethod(".generateDotPlot", "AltExpVolcanoPlot", function(x, labels, envir) {
 })
 
 #' @importFrom iSEE .getEncodedName .getPanelColor .addTourStep .dataParamBoxOpen
-setMethod(".definePanelTour", "AltExpVolcanoPlot", function(x) {
+setMethod(".definePanelTour", "AltVolcanoPlot", function(x) {
   collated <- rbind(
     c(
       element = paste0("#", .getEncodedName(x)),
       intro   = sprintf(
-        "The <font color=\"%s\">AltExp volcano plot</font> shows the
+        "The <font color=\"%s\">Alt volcano plot</font> shows the
 −log<sub>10</sub>(p-value) against the log fold-change for every feature in
 the selected alternative experiment.  Points are coloured <em>down</em> /
 <em>none</em> / <em>up</em> based on the configured significance thresholds,

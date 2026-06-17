@@ -10,11 +10,11 @@ experiment and the alternative experiments stored in a
 \code{\linkS4class{SingleCellExperiment}}.
 }
 \details{
-A feature is selected from \code{SelectionAltExp} — an altExp, or the main
-experiment via the \code{"(Main experiment)"} sentinel — typically via a
-\code{\linkS4class{AltExpRowDataTable}} (or any panel transmitting a row
+A feature is selected from \code{SelectionExperiment} — an altExp, or the main
+experiment via the \code{"(Main)"} sentinel — typically via a
+\code{\linkS4class{AltRowDataTable}} (or any panel transmitting a row
 selection) targeting that source. The value in \code{LookupColumn} for that
-feature is used as a join key to retrieve matching rows in \code{AltExp} —
+feature is used as a join key to retrieve matching rows in \code{Experiment} —
 itself an altExp, or the main experiment via the same sentinel — via
 \code{MapColumn}.  All matching rows are displayed as separate traces per
 sample.
@@ -22,25 +22,25 @@ sample.
 \section{Slots}{
 
 \describe{
-\item{\code{SelectionAltExp}}{\code{character(1)}.  Name of the alternative
+\item{\code{SelectionExperiment}}{\code{character(1)}.  Name of the alternative
 experiment from which the feature is selected and in whose
 \code{rowData} \code{LookupColumn} is looked up.  May also be the
-sentinel \code{"(Main experiment)"} to select features from — and look
+sentinel \code{"(Main)"} to select features from — and look
 up \code{LookupColumn} in — the main experiment instead of an altExp.}
 
 \item{\code{LookupColumn}}{\code{character(1)}.  Name of a \code{character} or
-\code{factor} column in \code{rowData} of \code{SelectionAltExp} (or the
+\code{factor} column in \code{rowData} of \code{SelectionExperiment} (or the
 sentinel \code{"(rowname)"} to use the rowname itself as the join key).}
 
-\item{\code{AltExp}}{\code{character(1)}.  Name of the alternative experiment whose
+\item{\code{Experiment}}{\code{character(1)}.  Name of the alternative experiment whose
 feature values are visualised.  May also be the sentinel
-\code{"(Main experiment)"} to visualise main experiment assay values
+\code{"(Main)"} to visualise main experiment assay values
 instead of an altExp's.}
 
-\item{\code{AltAssay}}{\code{character(1)}.  Assay within \code{AltExp} to plot.}
+\item{\code{AltAssay}}{\code{character(1)}.  Assay within \code{Experiment} to plot.}
 
 \item{\code{MapColumn}}{\code{character(1)}.  Name of a \code{character} or
-\code{factor} column in \code{rowData} of \code{AltExp} (or
+\code{factor} column in \code{rowData} of \code{Experiment} (or
 \code{"(rowname)"}).  Rows whose value matches the lookup key are shown.}
 
 \item{\code{PlotType}}{\code{character(1)}.  One of \code{"Auto"},
@@ -58,5 +58,5 @@ and multi-selection behaviour.
 
 \seealso{
 \code{\link{LinkedFeaturesAssayPlot}} for the constructor.
-\code{\linkS4class{AltExpRowDataTable}} for a compatible row-selection source.
+\code{\linkS4class{AltRowDataTable}} for a compatible row-selection source.
 }

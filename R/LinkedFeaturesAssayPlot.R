@@ -4,9 +4,9 @@
 
 # Extends FeatureAssayPlot from iSEE to support linked feature visualisation
 # across the main experiment and altExps. Decouples feature *selection*
-# (from SelectionAltExp) from feature *visualisation* (from AltExp); either
+# (from SelectionExperiment) from feature *visualisation* (from Experiment); either
 # side can independently be the main experiment or any altExp.  LookupColumn
-# lives in SelectionAltExp's rowData; MapColumn lives in AltExp's rowData.
+# lives in SelectionExperiment's rowData; MapColumn lives in AltExp's rowData.
 #
 # Works with stock iSEE: .addDotPlotDataColor/.addDotPlotDataShape/
 # .addDotPlotDataSize/.addDotPlotDataFacets are internal (non-exported) S4
@@ -32,30 +32,30 @@
 #' experiment and the alternative experiments stored in a
 #' \code{\linkS4class{SingleCellExperiment}}.
 #'
-#' A feature is selected from \code{SelectionAltExp} — an altExp, or the main
-#' experiment via the \code{"(Main experiment)"} sentinel — typically via a
-#' \code{\linkS4class{AltExpRowDataTable}} (or any panel transmitting a row
+#' A feature is selected from \code{SelectionExperiment} — an altExp, or the main
+#' experiment via the \code{"(Main)"} sentinel — typically via a
+#' \code{\linkS4class{AltRowDataTable}} (or any panel transmitting a row
 #' selection) targeting that source. The value in \code{LookupColumn} for that
-#' feature is used as a join key to retrieve matching rows in \code{AltExp} —
+#' feature is used as a join key to retrieve matching rows in \code{Experiment} —
 #' itself an altExp, or the main experiment via the same sentinel — via
 #' \code{MapColumn}.  All matching rows are displayed as separate traces per
 #' sample.
 #'
-#' @slot SelectionAltExp \code{character(1)}.  Name of the alternative
+#' @slot SelectionExperiment \code{character(1)}.  Name of the alternative
 #'   experiment from which the feature is selected and in whose
 #'   \code{rowData} \code{LookupColumn} is looked up.  May also be the
-#'   sentinel \code{"(Main experiment)"} to select features from — and look
+#'   sentinel \code{"(Main)"} to select features from — and look
 #'   up \code{LookupColumn} in — the main experiment instead of an altExp.
 #' @slot LookupColumn \code{character(1)}.  Name of a \code{character} or
-#'   \code{factor} column in \code{rowData} of \code{SelectionAltExp} (or the
+#'   \code{factor} column in \code{rowData} of \code{SelectionExperiment} (or the
 #'   sentinel \code{"(rowname)"} to use the rowname itself as the join key).
-#' @slot AltExp \code{character(1)}.  Name of the alternative experiment whose
+#' @slot Experiment \code{character(1)}.  Name of the alternative experiment whose
 #'   feature values are visualised.  May also be the sentinel
-#'   \code{"(Main experiment)"} to visualise main experiment assay values
+#'   \code{"(Main)"} to visualise main experiment assay values
 #'   instead of an altExp's.
-#' @slot AltAssay \code{character(1)}.  Assay within \code{AltExp} to plot.
+#' @slot AltAssay \code{character(1)}.  Assay within \code{Experiment} to plot.
 #' @slot MapColumn \code{character(1)}.  Name of a \code{character} or
-#'   \code{factor} column in \code{rowData} of \code{AltExp} (or
+#'   \code{factor} column in \code{rowData} of \code{Experiment} (or
 #'   \code{"(rowname)"}).  Rows whose value matches the lookup key are shown.
 #' @slot PlotType \code{character(1)}.  One of \code{"Auto"},
 #'   \code{"Scatter"}, or \code{"Scatter + lines"}.  Defaults to
@@ -69,23 +69,31 @@
 #'
 #' @seealso
 #' \code{\link{LinkedFeaturesAssayPlot}} for the constructor.
-#' \code{\linkS4class{AltExpRowDataTable}} for a compatible row-selection source.
+#' \code{\linkS4class{AltRowDataTable}} for a compatible row-selection source.
 #'
 #' @name LinkedFeaturesAssayPlot-class
 #' @rdname LinkedFeaturesAssayPlot-class
 #' @exportClass LinkedFeaturesAssayPlot
 NULL
 
-# Sentinel value for the `SelectionAltExp` slot/UI indicating that the
+# Sentinel value for the `SelectionExperiment` slot/UI indicating that the
 # feature should be selected from the main experiment's rownames/rowData
 # instead of from a named altExp.
-.selectionMainExpTitle <- "(Main experiment)"
+.selectionMainExpTitle <- "(Main)"
+
+# Returns assay names for `x`, falling back to integer-as-character indices
+# ("1", "2", …) when assays exist but carry no names.
+#' @importFrom SummarizedExperiment assayNames assays
+.safe_assay_names <- function(x) {
+  nms <- assayNames(x)
+  if (length(nms) > 0L) nms else as.character(seq_len(length(assays(x, withDimnames = FALSE))))
+}
 
 setClass("LinkedFeaturesAssayPlot",
   contains = "FeatureAssayPlot",
   slots    = c(
-    SelectionAltExp = "character",
-    AltExp          = "character",
+    SelectionExperiment = "character",
+    Experiment      = "character",
     AltAssay        = "character",
     LookupColumn    = "character",
     MapColumn       = "character",
@@ -112,8 +120,8 @@ setValidity2("LinkedFeaturesAssayPlot", function(object) {
 #' @importFrom iSEE .emptyDefault
 setMethod("initialize", "LinkedFeaturesAssayPlot", function(.Object, ...) {
   args <- list(...)
-  args <- .emptyDefault(args, "SelectionAltExp", NA_character_)
-  args <- .emptyDefault(args, "AltExp",          NA_character_)
+  args <- .emptyDefault(args, "SelectionExperiment", NA_character_)
+  args <- .emptyDefault(args, "Experiment",          NA_character_)
   args <- .emptyDefault(args, "AltAssay",        NA_character_)
   args <- .emptyDefault(args, "LookupColumn",    NA_character_)
   args <- .emptyDefault(args, "MapColumn",       NA_character_)
@@ -141,9 +149,9 @@ setMethod("initialize", "LinkedFeaturesAssayPlot", function(.Object, ...) {
 #'
 #' # Select a protein from the main experiment and visualise its peptides
 #' LinkedFeaturesAssayPlot(
-#'   SelectionAltExp    = "(Main experiment)",
+#'   SelectionExperiment    = "(Main)",
 #'   LookupColumn       = "Proteins",
-#'   AltExp             = "peptides",
+#'   Experiment            = "peptides",
 #'   AltAssay           = "peptides_norm",
 #'   MapColumn          = "Proteins"
 #' )
@@ -151,9 +159,9 @@ setMethod("initialize", "LinkedFeaturesAssayPlot", function(.Object, ...) {
 #' # Select a peptide from an altExp and visualise its protein in the main
 #' # experiment
 #' LinkedFeaturesAssayPlot(
-#'   SelectionAltExp    = "peptides",
+#'   SelectionExperiment    = "peptides",
 #'   LookupColumn       = "Proteins",
-#'   AltExp             = "(Main experiment)",
+#'   Experiment            = "(Main)",
 #'   AltAssay           = "proteins",
 #'   MapColumn          = "Proteins"
 #' )
@@ -169,9 +177,9 @@ setMethod("initialize", "LinkedFeaturesAssayPlot", function(.Object, ...) {
 #' vp <- VolcanoPlot()
 #' rdt <- RowDataTable(RowSelectionSource = "VolcanoPlot1")
 #' mlfap <- LinkedFeaturesAssayPlot(
-#' SelectionAltExp = "(Main experiment)",
+#' SelectionExperiment = "(Main)",
 #' LookupColumn = "(rowname)",
-#' AltExp = "(Main experiment)",
+#' Experiment= "(Main)",
 #' AltAssay = "proteins",
 #' MapColumn = "(rowname)",
 #' YAxisFeatureSource = "RowDataTable1",
@@ -183,9 +191,9 @@ setMethod("initialize", "LinkedFeaturesAssayPlot", function(.Object, ...) {
 #' # Define LinkedFeatureAssayPlot for peptides altExp assay  
 #' alfap <- LinkedFeaturesAssayPlot(
 #' YAxisFeatureSource = "RowDataTable1",
-#' SelectionAltExp = "(Main experiment)",
+#' SelectionExperiment = "(Main)",
 #' LookupColumn = "Proteins",
-#' AltExp = "peptides",
+#' Experiment= "peptides",
 #' AltAssay = "peptides_norm",
 #' PlotType = "Scatter + lines",
 #' XAxis = "Column data",
@@ -268,11 +276,11 @@ setMethod(".refineParameters", "LinkedFeaturesAssayPlot", function(x, se) {
   x <- callNextMethod()
   if (is.null(x)) return(NULL)
 
-  # SelectionAltExp and its feature name (the main experiment is also a
+  # SelectionExperiment and its feature name (the main experiment is also a
   # valid selection source, via the .selectionMainExpTitle sentinel)
-  x <- .replaceMissingWithFirst(x, "SelectionAltExp",
+  x <- .replaceMissingWithFirst(x, "SelectionExperiment",
                                  c(altExpNames(se), .selectionMainExpTitle))
-  sel_ae_name <- slot(x, "SelectionAltExp")
+  sel_ae_name <- slot(x, "SelectionExperiment")
   sel_rn      <- .altExpPlotLinked_selectionRownames(se, sel_ae_name)
 
   slot(x, iSEE:::.featAssayYAxisFeatName) <-
@@ -282,7 +290,7 @@ setMethod(".refineParameters", "LinkedFeaturesAssayPlot", function(x, se) {
       sel_rn[1]
     }
 
-  # Validate LookupColumn against SelectionAltExp rowData
+  # Validate LookupColumn against SelectionExperiment rowData
   cache    <- .getCachedCommonInfo(se, "LinkedFeaturesAssayPlot")
   valid_lc <- cache$valid.lookcols.by.altExp[[sel_ae_name]]
   cur_lc   <- slot(x, "LookupColumn")
@@ -290,15 +298,15 @@ setMethod(".refineParameters", "LinkedFeaturesAssayPlot", function(x, se) {
     slot(x, "LookupColumn") <- valid_lc[1]
   }
 
-  # Validate AltExp and AltAssay (the main experiment is also a valid
+  # Validate Experiment and AltAssay (the main experiment is also a valid
   # visualisation target, via the .selectionMainExpTitle sentinel)
-  x <- .replaceMissingWithFirst(x, "AltExp", c(altExpNames(se), .selectionMainExpTitle))
-  vis_ae_name <- slot(x, "AltExp")
+  x <- .replaceMissingWithFirst(x, "Experiment", c(altExpNames(se), .selectionMainExpTitle))
+  vis_ae_name <- slot(x, "Experiment")
 
   all_assays <- if (identical(vis_ae_name, .selectionMainExpTitle)) {
-    assayNames(se)
+    .safe_assay_names(se)
   } else {
-    assayNames(altExp(se, vis_ae_name))
+    .safe_assay_names(altExp(se, vis_ae_name))
   }
   if (length(all_assays) == 0L) {
     warning(sprintf("no valid 'assays' for plotting '%s'", class(x)[1]))
@@ -308,7 +316,7 @@ setMethod(".refineParameters", "LinkedFeaturesAssayPlot", function(x, se) {
     x <- .replaceMissingWithFirst(x, "AltAssay", all_assays)
   }
 
-  # Validate MapColumn against visualisation AltExp rowData
+  # Validate MapColumn against visualisation Experiment rowData
   valid_mc <- cache$valid.mapcols.by.altExp[[vis_ae_name]]
   cur_mc   <- slot(x, "MapColumn")
   if (is.na(cur_mc) || !nzchar(cur_mc) || !cur_mc %in% valid_mc) {
@@ -369,15 +377,15 @@ setMethod(".defineDataInterface", "LinkedFeaturesAssayPlot", function(x, se, sel
   all_altexps     <- altExpNames(se)
   all_sel_sources <- c(all_altexps, .selectionMainExpTitle)
   all_vis_sources <- c(all_altexps, .selectionMainExpTitle)
-  current_sel_ae  <- slot(x, "SelectionAltExp")
-  current_ae      <- slot(x, "AltExp")
+  current_sel_ae  <- slot(x, "SelectionExperiment")
+  current_ae      <- slot(x, "Experiment")
 
   all_assays <- if (identical(current_ae, .selectionMainExpTitle)) {
-    assayNames(se)
+    .safe_assay_names(se)
   } else if (!is.na(current_ae) && current_ae %in% all_altexps) {
-    assayNames(altExp(se, current_ae))
+    .safe_assay_names(altExp(se, current_ae))
   } else {
-    c(assayNames(se), unlist(lapply(all_altexps, function(nm) assayNames(altExp(se, nm)))))
+    c(.safe_assay_names(se), unlist(lapply(all_altexps, function(nm) .safe_assay_names(altExp(se, nm)))))
   }
 
   cache    <- .getCachedCommonInfo(se, "LinkedFeaturesAssayPlot")
@@ -409,9 +417,9 @@ selection made in another panel, for example an
     ), stringsAsFactors = FALSE)
   })
 
-  .addSpecificTour(class(x)[1], "SelectionAltExp", function(plot_name) {
+  .addSpecificTour(class(x)[1], "SelectionExperiment", function(plot_name) {
     data.frame(rbind(
-      c(element = paste0("#", plot_name, "_SelectionAltExp + .selectize-control"),
+      c(element = paste0("#", plot_name, "_SelectionExperiment + .selectize-control"),
         intro = "Choose where a feature is selected from: an alternative
 experiment, or the main experiment itself (<em>Main experiment</em>).  The
 <em>Lookup column</em> must be a column in this source's <code>rowData</code>."),
@@ -423,9 +431,9 @@ from the visualisation source.")
     ), stringsAsFactors = FALSE)
   })
 
-  .addSpecificTour(class(x)[1], "AltExp", function(plot_name) {
+  .addSpecificTour(class(x)[1], "Experiment", function(plot_name) {
     data.frame(rbind(
-      c(element = paste0("#", plot_name, "_AltExp + .selectize-control"),
+      c(element = paste0("#", plot_name, "_Experiment + .selectize-control"),
         intro = "Choose where feature values are displayed from: an
 alternative experiment, or the main experiment itself (<em>Main
 experiment</em>).  This can be the same as, or different from, the selection
@@ -445,9 +453,9 @@ feature with a line — useful for ordered x-axes such as sample IDs.")
   })
 
   list(
-    # ---- Feature selection (from SelectionAltExp) -----------------------
+    # ---- Feature selection (from SelectionExperiment) -----------------------
     .selectizeInput.iSEE(x, iSEE:::.featAssayYAxisFeatName,
-      label    = "Feature in selection AltExp:",
+      label    = "Feature in selection experiment:",
       choices  = NULL, selected = NULL, multiple = FALSE),
     selectInput(.input_FUN(iSEE:::.featAssayYAxisRowTable),
       label    = NULL,
@@ -458,7 +466,7 @@ feature with a line — useful for ordered x-axes such as sample IDs.")
       label = "Use dynamic feature selection for the y-axis",
       value = slot(x, iSEE:::.featAssayYAxisFeatDynamic)),
     # ---- Selection source (an altExp, or the main experiment) -----------
-    selectInput(.input_FUN("SelectionAltExp"),
+    selectInput(.input_FUN("SelectionExperiment"),
       label    = "Selection source:",
       choices  = all_sel_sources,
       selected = iSEE:::.choose_link(current_sel_ae, all_sel_sources)),
@@ -467,7 +475,7 @@ feature with a line — useful for ordered x-axes such as sample IDs.")
       choices  = valid_lc,
       selected = iSEE:::.choose_link(slot(x, "LookupColumn"), valid_lc)),
     # ---- Visualisation source (an altExp, or the main experiment) -------
-    selectInput(.input_FUN("AltExp"),
+    selectInput(.input_FUN("Experiment"),
       label    = "Visualisation source:",
       choices  = all_vis_sources,
       selected = iSEE:::.choose_link(current_ae, all_vis_sources)),
@@ -513,16 +521,16 @@ setMethod(".createObservers", "LinkedFeaturesAssayPlot",
   callNextMethod()
 
   plot_name    <- .getEncodedName(x)
-  ae_field     <- paste0(plot_name, "_AltExp")
+  ae_field     <- paste0(plot_name, "_Experiment")
   assay_field  <- paste0(plot_name, "_AltAssay")
-  sel_ae_field <- paste0(plot_name, "_SelectionAltExp")
+  sel_ae_field <- paste0(plot_name, "_SelectionExperiment")
   feat_field   <- paste0(plot_name, "_", iSEE:::.featAssayYAxisFeatName)
   source_field <- paste0(plot_name, "_", iSEE:::.featAssayYAxisRowTable)
 
   # Unprotected observers for custom slots that need no special side-effects.
-  # AltExp is handled by its own observeEvent below so the AltAssay dropdown
+  # Experiment is handled by its own observeEvent below so the AltAssay dropdown
   # is updated atomically — keeping both in an unprotected observer causes the
-  # same race-condition freeze seen in AltExpFeatureAssayPlot.
+  # same race-condition freeze seen in AltFeatureAssayPlot.
   .createUnprotectedParameterObservers(plot_name,
     fields   = c("AltAssay", "LookupColumn", "MapColumn", "PlotType"),
     input    = input,
@@ -542,18 +550,18 @@ setMethod(".createObservers", "LinkedFeaturesAssayPlot",
     pObjects = pObjects,
     rObjects = rObjects)
 
-  # Start AltExp change: reset AltAssay to first valid assay of the new
+  # Start Experiment change: reset AltAssay to first valid assay of the new
   # visualisation source (an altExp, or the main experiment) so that
   # .generateDotPlotData never receives a stale assay name.
   observeEvent(input[[ae_field]], {
     new_ae <- input[[ae_field]]
-    if (identical(new_ae, pObjects$memory[[plot_name]][["AltExp"]])) return(NULL)
-    pObjects$memory[[plot_name]][["AltExp"]] <- new_ae
+    if (identical(new_ae, pObjects$memory[[plot_name]][["Experiment"]])) return(NULL)
+    pObjects$memory[[plot_name]][["Experiment"]] <- new_ae
 
     new_assays <- if (identical(new_ae, .selectionMainExpTitle)) {
-      assayNames(se)
+      .safe_assay_names(se)
     } else {
-      assayNames(altExp(se, new_ae))
+      .safe_assay_names(altExp(se, new_ae))
     }
     cur_assay  <- pObjects$memory[[plot_name]][["AltAssay"]]
     new_assay  <- if (!is.na(cur_assay) && nzchar(cur_assay) &&
@@ -564,11 +572,11 @@ setMethod(".createObservers", "LinkedFeaturesAssayPlot",
   }, ignoreInit = TRUE)
   # end
 
-  # Repopulate the feature selectize with SelectionAltExp rownames.
+  # Repopulate the feature selectize with SelectionExperiment rownames.
   # Scheduled via session$onFlushed so it fires AFTER FeatureAssayPlot's own
   # updateSelectizeInput(choices=rownames(se)), overwriting it in the browser.
   repopulate_feat_choices <- function() {
-    current_sel_ae <- pObjects$memory[[plot_name]][["SelectionAltExp"]]
+    current_sel_ae <- pObjects$memory[[plot_name]][["SelectionExperiment"]]
     sel_ae_rn <- .altExpPlotLinked_selectionRownames(se, current_sel_ae)
     updateSelectizeInput(session, feat_field,
       choices  = sel_ae_rn,
@@ -594,7 +602,7 @@ setMethod(".createObservers", "LinkedFeaturesAssayPlot",
         pObjects$contents[[source_panel]])
       if (is.null(new_feat) || !nzchar(new_feat)) return()
 
-      current_sel_ae <- pObjects$memory[[plot_name]][["SelectionAltExp"]]
+      current_sel_ae <- pObjects$memory[[plot_name]][["SelectionExperiment"]]
       sel_ae_rn <- .altExpPlotLinked_selectionRownames(se, current_sel_ae)
       if (!new_feat %in% sel_ae_rn) return()
 
@@ -609,7 +617,7 @@ setMethod(".createObservers", "LinkedFeaturesAssayPlot",
   })
 
   # Re-populate after source panel relinking so the selectize always shows
-  # SelectionAltExp choices, not rownames(se).
+  # SelectionExperiment choices, not rownames(se).
   observe({
     source_panel <- input[[source_field]]
     if (length(source_panel) && nzchar(source_panel)) {
@@ -619,15 +627,15 @@ setMethod(".createObservers", "LinkedFeaturesAssayPlot",
     session$onFlushed(repopulate_feat_choices, once = TRUE)
   }, priority = -1L)
 
-  # start SelectionAltExp change: update feature selectize + trigger full re-render
+  # start SelectionExperiment change: update feature selectize + trigger full re-render
   # so that LookupColumn choices in defineDataInterface reflect the new altExp.
   #  
   observeEvent(input[[sel_ae_field]], {
     new_sel_ae <- input[[sel_ae_field]]
-    if (identical(new_sel_ae, pObjects$memory[[plot_name]][["SelectionAltExp"]])) {
+    if (identical(new_sel_ae, pObjects$memory[[plot_name]][["SelectionExperiment"]])) {
       return(NULL)
     }
-    pObjects$memory[[plot_name]][["SelectionAltExp"]] <- new_sel_ae
+    pObjects$memory[[plot_name]][["SelectionExperiment"]] <- new_sel_ae
 
     sel_ae_rn <- .altExpPlotLinked_selectionRownames(se, new_sel_ae)
     cur_feat  <- pObjects$memory[[plot_name]][[iSEE:::.featAssayYAxisFeatName]]
@@ -661,9 +669,9 @@ setMethod(".generateDotPlotData", "LinkedFeaturesAssayPlot", function(x, envir) 
   gene_selected_y <- slot(x, iSEE:::.featAssayYAxisFeatName)
   lookup_col      <- slot(x, "LookupColumn")
   map_col         <- slot(x, "MapColumn")
-  alt_exp_name    <- slot(x, "AltExp")
+  alt_exp_name    <- slot(x, "Experiment")
   alt_assay_name  <- slot(x, "AltAssay")
-  sel_ae_name     <- slot(x, "SelectionAltExp")
+  sel_ae_name     <- slot(x, "SelectionExperiment")
 
   err_msg <- "Select another visualisation source or assay"
   make_error_result <- function() {
@@ -715,7 +723,10 @@ setMethod(".generateDotPlotData", "LinkedFeaturesAssayPlot", function(x, envir) 
       " tidyr::pivot_longer(names_to = 'sample', values_to = 'Y',",
       " -'altExp_feature_id') |>",
       " as.data.frame();"
-    ), deparse(alt_assay_name))
+    ), local({
+      int_idx <- suppressWarnings(as.integer(alt_assay_name))
+      if (!is.na(int_idx)) paste0(int_idx, "L") else deparse(alt_assay_name)
+    }))
   )
 
   x_choice <- slot(x, iSEE:::.featAssayXAxis)

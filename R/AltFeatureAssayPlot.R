@@ -1,13 +1,13 @@
 ############################################################
-# AltExpFeatureAssayPlot
+# AltFeatureAssayPlot
 ############################################################
 
-# Extends FeatureAssayPlot to plot assay values from an alternative experiment.
-# The Y-axis feature is typically driven by an AltExpRowDataTable via
-# YAxisFeatureSource, so the feature name received is an altExp rowname.
-# The assay is taken from the selected altExp rather than the main experiment.
+# Extends FeatureAssayPlot to plot assay values from an alternative experiment
+# or the main experiment (via the "(Main)" sentinel).  The Y-axis
+# feature is typically driven by an AltRowDataTable or RowDataTable via
+# YAxisFeatureSource.
 
-#' AltExpFeatureAssayPlot: feature assay plot for alternative experiments
+#' AltFeatureAssayPlot: feature assay plot for alternative experiments
 #'
 #' An S4 class extending \code{\linkS4class{FeatureAssayPlot}} to plot
 #' assay values from a feature in an \emph{alternative experiment}
@@ -15,14 +15,16 @@
 #' \code{\linkS4class{SingleCellExperiment}}.
 #'
 #' The Y-axis feature is typically received from an
-#' \code{\linkS4class{AltExpRowDataTable}} panel via \code{YAxisFeatureSource},
+#' \code{\linkS4class{AltRowDataTable}} panel via \code{YAxisFeatureSource},
 #' so that clicking a row in the table immediately plots the corresponding
 #' altExp feature across all samples.
 #'
-#' @slot AltExp \code{character(1)}.  Name of the alternative experiment to
-#'   visualise (must be present in \code{altExpNames(se)}).
-#'   The \code{Assay} slot (inherited from \code{\linkS4class{FeatureAssayPlot}})
-#'   refers to an assay within this altExp.
+#' @slot Experiment \code{character(1)}.  Name of the alternative experiment to
+#'   visualise (must be present in \code{altExpNames(se)}), or the sentinel
+#'   \code{"(Main)"} to visualise assay values from the main
+#'   experiment.  The \code{Assay} slot (inherited from
+#'   \code{\linkS4class{FeatureAssayPlot}}) refers to an assay within the
+#'   chosen experiment.
 #'
 #' @section Inherited slots:
 #' All slots from \code{\linkS4class{FeatureAssayPlot}} are inherited,
@@ -31,64 +33,65 @@
 #' colour, shape, size, faceting, and multi-selection behaviour.
 #'
 #' @seealso
-#' \code{\link{AltExpFeatureAssayPlot}} for the constructor.
+#' \code{\link{AltFeatureAssayPlot}} for the constructor.
 #' \code{\linkS4class{FeatureAssayPlot}} for the parent class.
-#' \code{\linkS4class{AltExpRowDataTable}} for a compatible row-selection source.
+#' \code{\linkS4class{AltRowDataTable}} for a compatible row-selection source.
 #'
-#' @name AltExpFeatureAssayPlot-class
-#' @rdname AltExpFeatureAssayPlot-class
-#' @exportClass AltExpFeatureAssayPlot
+#' @name AltFeatureAssayPlot-class
+#' @rdname AltFeatureAssayPlot-class
+#' @exportClass AltFeatureAssayPlot
 NULL
 
-setClass("AltExpFeatureAssayPlot",
+setClass("AltFeatureAssayPlot",
   contains = "FeatureAssayPlot",
-  slots = c(AltExp = "character"))
+  slots = c(Experiment = "character"))
 
 #' @importFrom iSEE .emptyDefault
-setMethod("initialize", "AltExpFeatureAssayPlot", function(.Object, ...) {
+setMethod("initialize", "AltFeatureAssayPlot", function(.Object, ...) {
   args <- list(...)
-  args <- .emptyDefault(args, "AltExp", NA_character_)
+  args <- .emptyDefault(args, "Experiment", NA_character_)
   do.call(callNextMethod, c(list(.Object), args))
 })
 
-#' Construct an AltExpFeatureAssayPlot panel
+#' Construct an AltFeatureAssayPlot panel
 #'
-#' Creates an instance of \code{\linkS4class{AltExpFeatureAssayPlot}} for use
+#' Creates an instance of \code{\linkS4class{AltFeatureAssayPlot}} for use
 #' as a panel in an iSEE application.
 #'
 #' @param ... Named arguments corresponding to slots of
-#'   \code{\linkS4class{AltExpFeatureAssayPlot}} or its parent classes.
+#'   \code{\linkS4class{AltFeatureAssayPlot}} or its parent classes.
 #'
-#' @return An \code{\linkS4class{AltExpFeatureAssayPlot}} object.
+#' @return An \code{\linkS4class{AltFeatureAssayPlot}} object.
 #'
-#' @seealso \code{\linkS4class{AltExpFeatureAssayPlot}} for slot details.
+#' @seealso \code{\linkS4class{AltFeatureAssayPlot}} for slot details.
 #' @export
-AltExpFeatureAssayPlot <- function(...) new("AltExpFeatureAssayPlot", ...)
+AltFeatureAssayPlot <- function(...) new("AltFeatureAssayPlot", ...)
 
-setMethod(".fullName",   "AltExpFeatureAssayPlot", function(x) "AltExp feature assay plot")
-setMethod(".panelColor", "AltExpFeatureAssayPlot", function(x) "#AA5500")
+setMethod(".fullName",   "AltFeatureAssayPlot", function(x) "Alt feature assay plot")
+setMethod(".panelColor", "AltFeatureAssayPlot", function(x) "#AA5500")
 
 #' @importFrom iSEE .getCachedCommonInfo .setCachedCommonInfo
 #' @importFrom SingleCellExperiment altExp altExpNames
-#' @importFrom SummarizedExperiment assayNames
-setMethod(".cacheCommonInfo", "AltExpFeatureAssayPlot", function(x, se) {
-  if (!is.null(.getCachedCommonInfo(se, "AltExpFeatureAssayPlot"))) return(se)
+#' @importFrom SummarizedExperiment assayNames assays
+setMethod(".cacheCommonInfo", "AltFeatureAssayPlot", function(x, se) {
+  if (!is.null(.getCachedCommonInfo(se, "AltFeatureAssayPlot"))) return(se)
   se <- callNextMethod()
 
   valid_assays_by_ae <- lapply(altExpNames(se), function(ae_name) {
-    assayNames(altExp(se, ae_name))
+    .safe_assay_names(altExp(se, ae_name))
   })
   names(valid_assays_by_ae) <- altExpNames(se)
+  valid_assays_by_ae[[.selectionMainExpTitle]] <- .safe_assay_names(se)
 
-  .setCachedCommonInfo(se, "AltExpFeatureAssayPlot",
-    valid.altExp.names         = altExpNames(se),
+  .setCachedCommonInfo(se, "AltFeatureAssayPlot",
+    valid.altExp.names          = c(altExpNames(se), .selectionMainExpTitle),
     valid.assay.names.by.altExp = valid_assays_by_ae)
 })
 
 #' @importFrom iSEE .replaceMissingWithFirst
 #' @importFrom SingleCellExperiment altExp altExpNames
 #' @importFrom SummarizedExperiment assayNames
-setMethod(".refineParameters", "AltExpFeatureAssayPlot", function(x, se) {
+setMethod(".refineParameters", "AltFeatureAssayPlot", function(x, se) {
   # Save before callNextMethod() validates against the main experiment rownames
   # and resets any altExp feature name that was transmitted from a source panel.
   saved_y <- slot(x, iSEE:::.featAssayYAxisFeatName)
@@ -97,17 +100,18 @@ setMethod(".refineParameters", "AltExpFeatureAssayPlot", function(x, se) {
   x <- callNextMethod()
   if (is.null(x)) return(NULL)
 
-  x <- .replaceMissingWithFirst(x, "AltExp", altExpNames(se))
-  ae <- altExp(se, slot(x, "AltExp"))
+  x <- .replaceMissingWithFirst(x, "Experiment", c(altExpNames(se), .selectionMainExpTitle))
+  ae_name <- slot(x, "Experiment")
+  ae <- if (identical(ae_name, .selectionMainExpTitle)) se else altExp(se, ae_name)
 
   if (nrow(ae) == 0L) {
-    warning(sprintf("no rows in altExp '%s'", slot(x, "AltExp")))
+    warning(sprintf("no rows in '%s'", ae_name))
     return(NULL)
   }
 
-  all_ae_assays <- assayNames(ae)
+  all_ae_assays <- .safe_assay_names(ae)
   if (length(all_ae_assays) == 0L) {
-    warning(sprintf("no assays in altExp '%s'", slot(x, "AltExp")))
+    warning(sprintf("no assays in '%s'", ae_name))
     return(NULL)
   }
 
@@ -117,10 +121,9 @@ setMethod(".refineParameters", "AltExpFeatureAssayPlot", function(x, se) {
 
   ae_rownames <- rownames(ae)
 
-  # Restore saved feature names if they are valid altExp features; otherwise
-  # fall back to the first altExp feature.  This preserves selections
-  # transmitted from AltExpRowDataTable (altExp rownames) that callNextMethod()
-  # would otherwise discard because they are absent from rownames(se).
+  # Restore saved feature names if valid; otherwise fall back to first row.
+  # This preserves selections transmitted from a source panel that
+  # callNextMethod() would discard when they are absent from rownames(se).
   slot(x, iSEE:::.featAssayYAxisFeatName) <-
     if (!is.na(saved_y) && nzchar(saved_y) && saved_y %in% ae_rownames) {
       saved_y
@@ -143,13 +146,17 @@ setMethod(".refineParameters", "AltExpFeatureAssayPlot", function(x, se) {
 #' @importFrom SingleCellExperiment altExpNames altExp
 #' @importFrom SummarizedExperiment assayNames
 #' @importFrom shiny selectInput checkboxInput selectizeInput
-setMethod(".defineDataInterface", "AltExpFeatureAssayPlot", function(x, se, select_info) {
+setMethod(".defineDataInterface", "AltFeatureAssayPlot", function(x, se, select_info) {
   panel_name <- .getEncodedName(x)
   .input_FUN <- function(field) paste0(panel_name, "_", field)
 
-  all_altexps     <- altExpNames(se)
-  current_ae      <- slot(x, "AltExp")
-  all_ae_assays   <- assayNames(altExp(se, current_ae))
+  all_altexps     <- c(altExpNames(se), .selectionMainExpTitle)
+  current_ae      <- slot(x, "Experiment")
+  all_ae_assays   <- if (identical(current_ae, .selectionMainExpTitle)) {
+    .safe_assay_names(se)
+  } else {
+    .safe_assay_names(altExp(se, current_ae))
+  }
   column_covariates <- .getCachedCommonInfo(se, "ColumnDotPlot")$valid.colData.names
   tab_by_row      <- select_info$single$feature
 
@@ -159,12 +166,12 @@ setMethod(".defineDataInterface", "AltExpFeatureAssayPlot", function(x, se, sele
   }
   xaxis_choices <- c(xaxis_choices, iSEE:::.featAssayXAxisFeatNameTitle)
 
-  .addSpecificTour(class(x)[1], "AltExp", function(plot_name) {
+  .addSpecificTour(class(x)[1], "Experiment", function(plot_name) {
     data.frame(rbind(
-      c(element = paste0("#", plot_name, "_AltExp + .selectize-control"),
+      c(element = paste0("#", plot_name, "_Experiment + .selectize-control"),
         intro = "Select the alternative experiment whose assay values are
 plotted.  Changing this updates the available assays and — when driven by
-an <em>AltExp row data table</em> — the available features."),
+an <em>Alt row data table</em> — the available features."),
       c(element = paste0("#", plot_name, "_", iSEE:::.featAssayAssay,
                          " + .selectize-control"),
         intro = "Select the assay within the chosen alternative experiment
@@ -174,13 +181,13 @@ log-normalised values.")
   })
 
   list(
-    # AltExp selector
-    selectInput(.input_FUN("AltExp"),
-      label    = "AltExp:",
+    # Experiment selector (main experiment or an altExp)
+    selectInput(.input_FUN("Experiment"),
+      label    = "Experiment:",
       choices  = all_altexps,
       selected = iSEE:::.choose_link(current_ae, all_altexps)
     ),
-    # Y-axis feature (driven by AltExpRowDataTable via YAxisFeatureSource)
+    # Y-axis feature (driven by AltRowDataTable via YAxisFeatureSource)
     .selectizeInput.iSEE(x, iSEE:::.featAssayYAxisFeatName,
       label    = "Y-axis feature:",
       choices  = NULL, selected = NULL, multiple = FALSE
@@ -241,25 +248,29 @@ log-normalised values.")
 #' @importFrom SingleCellExperiment altExp
 #' @importFrom SummarizedExperiment assayNames
 #' @importFrom shiny isolate observe observeEvent updateSelectInput updateSelectizeInput
-setMethod(".createObservers", "AltExpFeatureAssayPlot",
+setMethod(".createObservers", "AltFeatureAssayPlot",
     function(x, se, input, session, pObjects, rObjects) {
   callNextMethod()
 
   plot_name    <- .getEncodedName(x)
-  ae_field     <- paste0(plot_name, "_AltExp")
+  ae_field     <- paste0(plot_name, "_Experiment")
   assay_field  <- paste0(plot_name, "_", iSEE:::.featAssayAssay)
   feat_field   <- paste0(plot_name, "_", iSEE:::.featAssayYAxisFeatName)
   source_field <- paste0(plot_name, "_", iSEE:::.featAssayYAxisRowTable)
 
-  # Helper: repopulate the Y-axis feature selectize with altExp rownames.
+  # Helper: repopulate the Y-axis feature selectize with experiment rownames.
   # Called via session$onFlushed so it fires AFTER all reactive observers in
   # the current flush have run — including FeatureAssayPlot's own observer that
   # calls updateSelectizeInput(choices = rownames(se)).  Because Shiny sends
   # queued messages in order, our message arrives at the browser after iSEE's
-  # and overwrites it with the correct altExp choices.
+  # and overwrites it with the correct choices.
   repopulate_feat_choices <- function() {
-    current_ae  <- pObjects$memory[[plot_name]][["AltExp"]]
-    ae_rownames <- rownames(altExp(se, current_ae))
+    current_ae  <- pObjects$memory[[plot_name]][["Experiment"]]
+    ae_rownames <- if (identical(current_ae, .selectionMainExpTitle)) {
+      rownames(se)
+    } else {
+      rownames(altExp(se, current_ae))
+    }
     updateSelectizeInput(session, feat_field,
       choices  = ae_rownames,
       selected = pObjects$memory[[plot_name]][[iSEE:::.featAssayYAxisFeatName]],
@@ -287,8 +298,12 @@ setMethod(".createObservers", "AltExpFeatureAssayPlot",
       )
       if (is.null(new_feat) || !nzchar(new_feat)) return()
 
-      current_ae <- pObjects$memory[[plot_name]][["AltExp"]]
-      ae_rn      <- rownames(altExp(se, current_ae))
+      current_ae <- pObjects$memory[[plot_name]][["Experiment"]]
+      ae_rn <- if (identical(current_ae, .selectionMainExpTitle)) {
+        rownames(se)
+      } else {
+        rownames(altExp(se, current_ae))
+      }
       if (!new_feat %in% ae_rn) return()
 
       old_feat <- pObjects$memory[[plot_name]][[iSEE:::.featAssayYAxisFeatName]]
@@ -320,15 +335,17 @@ setMethod(".createObservers", "AltExpFeatureAssayPlot",
   # nocov start
   observeEvent(input[[ae_field]], {
     matched_ae <- input[[ae_field]]
-    if (identical(matched_ae, pObjects$memory[[plot_name]][["AltExp"]])) return(NULL)
-    pObjects$memory[[plot_name]][["AltExp"]] <- matched_ae
+    if (identical(matched_ae, pObjects$memory[[plot_name]][["Experiment"]])) return(NULL)
+    pObjects$memory[[plot_name]][["Experiment"]] <- matched_ae
 
-    new_assays <- assayNames(altExp(se, matched_ae))
+    ae_obj <- if (identical(matched_ae, .selectionMainExpTitle)) se else altExp(se, matched_ae)
+
+    new_assays <- .safe_assay_names(ae_obj)
     cur_assay  <- pObjects$memory[[plot_name]][[iSEE:::.featAssayAssay]]
     new_assay  <- if (cur_assay %in% new_assays) cur_assay else new_assays[1]
     pObjects$memory[[plot_name]][[iSEE:::.featAssayAssay]] <- new_assay
 
-    new_rn   <- rownames(altExp(se, matched_ae))
+    new_rn   <- rownames(ae_obj)
     cur_feat <- pObjects$memory[[plot_name]][[iSEE:::.featAssayYAxisFeatName]]
     new_feat <- if (!is.na(cur_feat) && nzchar(cur_feat) && cur_feat %in% new_rn) {
       cur_feat
@@ -353,18 +370,18 @@ setMethod(".createObservers", "AltExpFeatureAssayPlot",
 })
 
 #' @importFrom iSEE .getEncodedName .getPanelColor .addTourStep .dataParamBoxOpen
-setMethod(".definePanelTour", "AltExpFeatureAssayPlot", function(x) {
+setMethod(".definePanelTour", "AltFeatureAssayPlot", function(x) {
   collated <- rbind(
     c(
       element = paste0("#", .getEncodedName(x)),
       intro   = sprintf(
-        "The <font color=\"%s\">AltExp feature assay plot</font> shows assay
+        "The <font color=\"%s\">Alt feature assay plot</font> shows assay
 values for a single feature from an <em>alternative experiment</em> stored
 inside a <code>SingleCellExperiment</code>.  Each point is a sample; the
 y-axis shows the assay value of the selected altExp feature.
 <br><br>
 The feature is typically chosen by clicking a row in an
-<em>AltExp row data table</em> panel linked via the
+<em>Alt row data table</em> panel linked via the
 <em>Y-axis feature source</em>.", .getPanelColor(x))
     ),
     .addTourStep(x, .dataParamBoxOpen,
@@ -389,12 +406,16 @@ assay, and feature to display, as well as the x-axis variable.
 #' @importFrom iSEE .textEval
 #' @importFrom SingleCellExperiment altExp
 #' @importFrom SummarizedExperiment assay colData
-setMethod(".generateDotPlotData", "AltExpFeatureAssayPlot", function(x, envir) {
+setMethod(".generateDotPlotData", "AltFeatureAssayPlot", function(x, envir) {
   data_cmds <- list()
 
-  ae_name         <- slot(x, "AltExp")
+  ae_name         <- slot(x, "Experiment")
   gene_selected_y <- slot(x, iSEE:::.featAssayYAxisFeatName)
   assay_choice    <- slot(x, iSEE:::.featAssayAssay)
+  assay_arg_str   <- local({
+    int_idx <- suppressWarnings(as.integer(assay_choice))
+    if (!is.na(int_idx)) paste0(int_idx, "L") else deparse(assay_choice)
+  })
 
   plot_title <- gene_selected_y
   y_lab      <- sprintf("%s (%s)", gene_selected_y, assay_choice)
@@ -409,10 +430,11 @@ setMethod(".generateDotPlotData", "AltExpFeatureAssayPlot", function(x, envir) {
   }
 
   data_cmds[["y"]] <- c(
-    sprintf("ae <- altExp(se, %s);", deparse(ae_name)),
+    if (identical(ae_name, .selectionMainExpTitle)) "ae <- se;" else
+      sprintf("ae <- altExp(se, %s);", deparse(ae_name)),
     sprintf(
       "plot.data <- data.frame(Y = assay(ae, %s)[%s, ], row.names = colnames(se));",
-      deparse(assay_choice), deparse(gene_selected_y))
+      assay_arg_str, deparse(gene_selected_y))
   )
 
   x_choice <- slot(x, iSEE:::.featAssayXAxis)
@@ -429,7 +451,7 @@ setMethod(".generateDotPlotData", "AltExpFeatureAssayPlot", function(x, envir) {
     x_lab           <- sprintf("%s (%s)", gene_selected_x, assay_choice)
     data_cmds[["x"]] <- sprintf(
       "plot.data$X <- assay(ae, %s)[%s, ];",
-      deparse(assay_choice), deparse(gene_selected_x))
+      assay_arg_str, deparse(gene_selected_x))
 
   } else if (x_choice == iSEE:::.featAssayXAxisSelectionsTitle) {
     x_lab      <- "Column selection"
@@ -456,7 +478,7 @@ setMethod(".generateDotPlotData", "AltExpFeatureAssayPlot", function(x, envir) {
 })
 
 #' @importFrom iSEE .generateDotPlot .textEval
-setMethod(".generateDotPlot", "AltExpFeatureAssayPlot", function(x, labels, envir) {
+setMethod(".generateDotPlot", "AltFeatureAssayPlot", function(x, labels, envir) {
   if (identical(labels$Y, "")) {
     plot_cmds <- c(
       "dot.plot <- ggplot(plot.data, aes(x = X, y = Y)) +",
