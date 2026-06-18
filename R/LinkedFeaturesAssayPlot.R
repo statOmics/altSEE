@@ -673,7 +673,7 @@ setMethod(".generateDotPlotData", "LinkedFeaturesAssayPlot", function(x, envir) 
   alt_assay_name  <- slot(x, "AltAssay")
   sel_ae_name     <- slot(x, "SelectionExperiment")
 
-  err_msg <- "Select another visualisation source or assay"
+  err_msg <- "Select other selection source/lookup column or visualisation source/Map column/assay"
   make_error_result <- function() {
     err_cmd <- paste0(
       "plot.data <- data.frame(",
