@@ -139,8 +139,7 @@ setMethod(".refineParameters", "AltReducedDimensionPlot", function(x, se) {
   x
 })
 
-#' @importFrom iSEE .getEncodedName .getCachedCommonInfo .selectInput.iSEE
-#'   .addSpecificTour
+#' @importFrom iSEE .getEncodedName .getCachedCommonInfo .selectInput.iSEE .addSpecificTour
 #' @importFrom SingleCellExperiment altExp altExpNames reducedDim reducedDimNames
 #' @importFrom shiny selectInput
 setMethod(".defineDataInterface", "AltReducedDimensionPlot", function(x, se, select_info) {

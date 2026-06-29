@@ -141,8 +141,7 @@ setMethod(".refineParameters", "AltFeatureAssayPlot", function(x, se) {
   x
 })
 
-#' @importFrom iSEE .getEncodedName .getCachedCommonInfo .selectizeInput.iSEE
-#'   .radioButtons.iSEE .conditionalOnRadio .addSpecificTour
+#' @importFrom iSEE .getEncodedName .getCachedCommonInfo .selectizeInput.iSEE .radioButtons.iSEE .conditionalOnRadio .addSpecificTour
 #' @importFrom SingleCellExperiment altExpNames altExp
 #' @importFrom SummarizedExperiment assayNames
 #' @importFrom shiny selectInput checkboxInput selectizeInput
@@ -243,8 +242,7 @@ log-normalised values.")
   )
 })
 
-#' @importFrom iSEE .getEncodedName .createProtectedParameterObservers
-#'   .trackSingleSelection .trackRelinkedSelection
+#' @importFrom iSEE .getEncodedName .createProtectedParameterObservers .trackSingleSelection .trackRelinkedSelection
 #' @importFrom SingleCellExperiment altExp
 #' @importFrom SummarizedExperiment assayNames
 #' @importFrom shiny isolate observe observeEvent updateSelectInput updateSelectizeInput

@@ -365,8 +365,7 @@ setMethod(".refineParameters", "LinkedFeaturesAssayPlot", function(x, se) {
 # Data interface
 ############################################################
 
-#' @importFrom iSEE .getEncodedName .getCachedCommonInfo .selectizeInput.iSEE
-#'   .radioButtons.iSEE .conditionalOnRadio .addSpecificTour .findAtomicFields
+#' @importFrom iSEE .getEncodedName .getCachedCommonInfo .selectizeInput.iSEE .radioButtons.iSEE .conditionalOnRadio .addSpecificTour .findAtomicFields
 #' @importFrom SingleCellExperiment altExpNames altExp
 #' @importFrom SummarizedExperiment assayNames rowData colData
 #' @importFrom shiny selectInput checkboxInput
@@ -510,12 +509,10 @@ feature with a line — useful for ordered x-axes such as sample IDs.")
 # Observers
 ############################################################
 
-#' @importFrom iSEE .getEncodedName .createUnprotectedParameterObservers
-#'   .createProtectedParameterObservers .trackSingleSelection .trackRelinkedSelection
+#' @importFrom iSEE .getEncodedName .createUnprotectedParameterObservers .createProtectedParameterObservers .trackSingleSelection .trackRelinkedSelection
 #' @importFrom SingleCellExperiment altExp altExpNames
 #' @importFrom SummarizedExperiment assayNames
-#' @importFrom shiny isolate observe observeEvent updateSelectInput
-#'   updateSelectizeInput
+#' @importFrom shiny isolate observe observeEvent updateSelectInput updateSelectizeInput
 setMethod(".createObservers", "LinkedFeaturesAssayPlot",
     function(x, se, input, session, pObjects, rObjects) {
   callNextMethod()
@@ -761,11 +758,9 @@ setMethod(".generateDotPlotData", "LinkedFeaturesAssayPlot", function(x, envir) 
 # Plot generation
 ############################################################
 
-#' @importFrom iSEE .buildAes .addFacets .addCustomLabelsCommands
-#'   .addLabelCentersCommands .addMultiSelectionPlotCommands .textEval
+#' @importFrom iSEE .buildAes .addFacets .addCustomLabelsCommands .addLabelCentersCommands .addMultiSelectionPlotCommands .textEval
 #' @importFrom dplyr n_distinct
-#' @importFrom ggplot2 ggplot aes geom_line theme_bw theme element_text
-#'   scale_x_continuous scale_y_continuous labs
+#' @importFrom ggplot2 ggplot aes geom_line theme_bw theme element_text scale_x_continuous scale_y_continuous labs
 setMethod(".generateDotPlot", "LinkedFeaturesAssayPlot", function(x, labels, envir) {
   # Error sentinel: .generateDotPlotData signals failure via labels$Y == "".
   # Render a friendly red-title message instead of letting the standard renderer
@@ -1021,9 +1016,7 @@ setMethod(".allowableColorByDataChoices", "LinkedFeaturesAssayPlot", function(x,
   .findAtomicFields(colData(se))
 })
 
-#' @importFrom iSEE .getCachedCommonInfo .getEncodedName .allowableColorByDataChoices
-#'   .singleSelectionDimension .radioButtons.iSEE .conditionalOnRadio
-#'   .sliderInput.iSEE
+#' @importFrom iSEE .getCachedCommonInfo .getEncodedName .allowableColorByDataChoices .singleSelectionDimension .radioButtons.iSEE .conditionalOnRadio .sliderInput.iSEE
 #' @importFrom colourpicker colourInput
 #' @importFrom shiny hr tagList selectInput selectizeInput checkboxInput
 setMethod(".defineVisualColorInterface", "LinkedFeaturesAssayPlot",
@@ -1144,8 +1137,7 @@ setMethod(".defineVisualShapeInterface", "LinkedFeaturesAssayPlot", function(x, 
 # Panel tour
 ############################################################
 
-#' @importFrom iSEE .getEncodedName .getPanelColor .addTourStep .dataParamBoxOpen
-#'   .definePanelTour
+#' @importFrom iSEE .getEncodedName .getPanelColor .addTourStep .dataParamBoxOpen .definePanelTour
 setMethod(".definePanelTour", "LinkedFeaturesAssayPlot", function(x) {
   collated <- rbind(
     c(

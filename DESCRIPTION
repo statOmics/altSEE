@@ -13,7 +13,6 @@ Authors@R: c(
 Description: altSEE (the iSEE universe) contains diverse functionality to extend the usage of the iSEE package, including additional classes for the panels to visualise altExps in the SingleCellExperiment class.
 License: Artistic-2.0
 Encoding: UTF-8
-RoxygenNote: 7.3.3
 Depends:
     iSEE,
     ggplot2 (>= 3.4.0),
@@ -28,9 +27,11 @@ Imports:
       tibble,
       tidyr
 Suggests:
+      testthat (>= 3.0.0),
       msqrob2,
       QFeatures,
       BiocStyle,
       scater,
       BiocFileCache
 LazyData: true
+Config/roxygen2/version: 8.0.0

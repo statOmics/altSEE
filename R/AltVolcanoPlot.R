@@ -72,8 +72,7 @@ AltVolcanoPlot <- function(...) new("AltVolcanoPlot", ...)
 setMethod(".fullName",   "AltVolcanoPlot", function(x) "Alt volcano plot")
 setMethod(".panelColor", "AltVolcanoPlot", function(x) "#6B2D8B")
 
-#' @importFrom iSEE .getCachedCommonInfo .setCachedCommonInfo .findAtomicFields
-#'   .whichNumeric
+#' @importFrom iSEE .getCachedCommonInfo .setCachedCommonInfo .findAtomicFields .whichNumeric
 #' @importFrom SingleCellExperiment altExp altExpNames
 #' @importFrom SummarizedExperiment rowData
 setMethod(".cacheCommonInfo", "AltVolcanoPlot", function(x, se) {
@@ -140,8 +139,7 @@ setMethod(".refineParameters", "AltVolcanoPlot", function(x, se) {
   x
 })
 
-#' @importFrom iSEE .getEncodedName .getCachedCommonInfo .selectInput.iSEE
-#'   .addSpecificTour
+#' @importFrom iSEE .getEncodedName .getCachedCommonInfo .selectInput.iSEE .addSpecificTour
 #' @importFrom SingleCellExperiment altExpNames
 #' @importFrom shiny selectInput hr
 setMethod(".defineDataInterface", "AltVolcanoPlot", function(x, se, select_info) {
